@@ -1,0 +1,5 @@
+username,password,vgroup,comment
+testpy,testpy,py,TestUser-Py-0
+testmath,testmath,math,TestUser-Math-0
+pygpt,pygpt,pygpt,PyGPT
+mathgpt,mathgpt,mathgpt,MathGPT

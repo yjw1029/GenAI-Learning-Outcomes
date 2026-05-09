@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+
+# Environments
+.venv/
+.uv/
+.env
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+
+# Data & outputs
+data/
+figures/
+figures*/
+**/*.db
+**/*.sqlite
+
+# Logs
+*.log
+
+# NiceGUI
+.nicegui/
+
+tests/

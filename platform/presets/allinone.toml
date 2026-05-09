@@ -1,0 +1,433 @@
+[users]
+auth_file = "presets/auth.example.csv"
+
+[problemset]
+math = [
+    "math_hw1/p1",
+    "math_hw1/p2",
+    "math_hw1/p3",
+    "math_hw1/p4",
+    "math_hw2/p1",
+    "math_hw2/p2",
+    "math_hw2/p3",
+    "math_hw2/p4",
+    "math_review/p1",
+    "math_review/p2",
+    "math_review/p3",
+    "math_review/p4",
+    "math_review/p5",
+    "math_review/p6",
+    "math_review/p7",
+    "math_review/p8",
+    "math_review/p9",
+    "math_review/p10",
+]
+
+code = [
+    "py_hw1/p1",
+    "py_hw1/p2",
+    "py_hw1/p3",
+    "py_hw1/p4",
+    "py_hw1/p5",
+    "py_hw1/p6",
+    "py_hw1/p7",
+    "py_hw1/p8",
+    "py_hw2/p1",
+    "py_hw2/p2",
+    "py_hw2/p3",
+    "py_hw2/p4",
+    "py_hw2/p5",
+    "py_hw2/p6",
+    "py_hw2/p7",
+    "py_hw2/p8",
+    "py_review/p1",
+    "py_review/p2",
+    "py_review/p3",
+    "py_review/p4",
+    "py_review/p5",
+    "py_review/p6",
+    "py_review/p7",
+    "py_review/p8",
+    "py_review/p9",
+    "py_review/p10",
+    "py_review/p11",
+    "py_review/p12",
+    "py_review/p13",
+    "py_review/p14",
+    "py_review/p15",
+    "py_review/p16",
+    "py_review/p17",
+    "py_review/p18",
+    "py_review/p19",
+    "py_review/p20",
+    "py_review/p21",
+    "py_review/p22",
+    "py_review/p23",
+    "py_review/p24",
+    "py_review/p25",
+    "py_review/p26",
+    "py_review/p27",
+    "py_review/p28",
+    "py_review/p29",
+    "py_review/p30",
+    "py_review/p31",
+    "py_review/p32"
+]
+
+
+[vgroups]
+[vgroups.all]
+test_group = 'all'
+learning_group = "all"
+a1_group = 'all'
+a2_group = 'all'
+review_group = 'all'
+
+[vgroups.py]
+test_group = 'py0'
+learning_group = "pyl"
+a1_group = 'py1'
+a2_group = 'py2'
+review_group = 'pyr'
+
+[vgroups.pygpt]
+test_group = 'py0gpt'
+learning_group = "pylgpt"
+a1_group = 'py1gpt'
+a2_group = 'py2'
+review_group = 'pyrgpt'
+
+
+[vgroups.math]
+test_group = 'math0'
+learning_group = "mathl"
+a1_group = 'math1'
+a2_group = 'math2'
+review_group = 'mathr'
+
+[vgroups.mathgpt]
+test_group = 'math0gpt'
+learning_group = "mathlgpt"
+a1_group = 'math1gpt'
+a2_group = 'math2'
+review_group = 'mathrgpt'
+
+
+[groups]
+[groups.all]
+python_tab_enabled = true
+code_tab_enabled = true
+math_tab_enabled = true
+chat_tab_enabled = true
+code_available_problem = [
+    "py_hw1/p1",
+    "py_hw1/p2",
+    "py_hw1/p3",
+    "py_hw1/p4",
+    "py_hw1/p5",
+    "py_hw1/p6",
+    "py_hw1/p7",
+    "py_hw1/p8",
+    "py_hw2/p1",
+    "py_hw2/p2",
+    "py_hw2/p3",
+    "py_hw2/p4",
+    "py_hw2/p5",
+    "py_hw2/p6",
+    "py_hw2/p7",
+    "py_hw2/p8",
+    "py_review/p1",
+    "py_review/p2",
+    "py_review/p3",
+    "py_review/p4",
+    "py_review/p5",
+    "py_review/p6",
+    "py_review/p7",
+    "py_review/p8",
+    "py_review/p9",
+    "py_review/p10",
+    "py_review/p11",
+    "py_review/p12",
+    "py_review/p13",
+    "py_review/p14",
+    "py_review/p15",
+    "py_review/p16",
+    "py_review/p17",
+    "py_review/p18",
+    "py_review/p19",
+    "py_review/p20",
+    "py_review/p21",
+    "py_review/p22",
+    "py_review/p23",
+    "py_review/p24",
+    "py_review/p25",
+    "py_review/p26",
+    "py_review/p27",
+    "py_review/p28",
+    "py_review/p29",
+    "py_review/p30",
+    "py_review/p31",
+    "py_review/p32"
+]
+math_available_problem = [
+    "math_hw1/p1",
+    "math_hw1/p2",
+    "math_hw1/p3",
+    "math_hw1/p4",
+    "math_hw2/p1",
+    "math_hw2/p2",
+    "math_hw2/p3",
+    "math_hw2/p4",
+]
+
+[groups.py0]
+python_tab_enabled = true
+code_tab_enabled = true
+math_tab_enabled = false
+chat_tab_enabled = false
+code_available_problem = ['py_hw1/p1', 'py_hw1/p2', 'py_hw1/p3', 'py_hw1/p4', 'py_hw1/p5', 'py_hw1/p6', 'py_hw1/p7', 'py_hw1/p8']
+
+[groups.py0gpt]
+python_tab_enabled = true
+code_tab_enabled = true
+math_tab_enabled = false
+chat_tab_enabled = true
+code_available_problem = ['py_hw1/p1', 'py_hw1/p2', 'py_hw1/p3', 'py_hw1/p4', 'py_hw1/p5', 'py_hw1/p6', 'py_hw1/p7', 'py_hw1/p8']
+
+[groups.math0]
+code_tab_enabled = false
+math_tab_enabled = true
+chat_tab_enabled = false
+math_available_problem = ["math_hw1/p1", "math_hw1/p2", "math_hw1/p3", "math_hw1/p4"]
+
+[groups.math0gpt]
+code_tab_enabled = false
+math_tab_enabled = true
+chat_tab_enabled = true
+math_available_problem = ["math_hw1/p1", "math_hw1/p2", "math_hw1/p3", "math_hw1/p4"]
+
+
+[groups.pyl]
+code_tab_enabled = true
+math_tab_enabled = false
+chat_tab_enabled = false
+
+[groups.pylgpt]
+code_tab_enabled = true
+math_tab_enabled = false
+chat_tab_enabled = true
+
+
+
+
+[groups.mathl]
+code_tab_enabled = false
+math_tab_enabled = true
+chat_tab_enabled = false
+
+[groups.mathlgpt]
+code_tab_enabled = false
+math_tab_enabled = true
+chat_tab_enabled = true
+
+
+
+
+[groups.py1]
+python_tab_enabled = true
+code_tab_enabled = true
+math_tab_enabled = false
+chat_tab_enabled = false
+code_available_problem = [
+    'py_hw1/p1',
+    'py_hw1/p2',
+    'py_hw1/p3',
+    'py_hw1/p4',
+    'py_hw1/p5',
+    'py_hw1/p6',
+    'py_hw1/p7',
+    'py_hw1/p8',
+]
+
+[groups.py1gpt]
+python_tab_enabled = true
+code_tab_enabled = true
+math_tab_enabled = false
+chat_tab_enabled = true
+code_available_problem = [
+    'py_hw1/p1',
+    'py_hw1/p2',
+    'py_hw1/p3',
+    'py_hw1/p4',
+    'py_hw1/p5',
+    'py_hw1/p6',
+    'py_hw1/p7',
+    'py_hw1/p8',
+]
+
+
+[groups.math1]
+code_tab_enabled = false
+math_tab_enabled = true
+chat_tab_enabled = false
+math_available_problem = [
+    'math_hw1/p1',
+    'math_hw1/p2',
+    'math_hw1/p3',
+    'math_hw1/p4',
+]
+
+[groups.math1gpt]
+code_tab_enabled = false
+math_tab_enabled = true
+chat_tab_enabled = true
+math_available_problem = [
+    'math_hw1/p1',
+    'math_hw1/p2',
+    'math_hw1/p3',
+    'math_hw1/p4',
+]
+
+
+
+[groups.py2]
+python_tab_enabled = true
+code_tab_enabled = true
+math_tab_enabled = false
+chat_tab_enabled = false
+code_available_problem = [
+    'py_hw2/p1',
+    'py_hw2/p2',
+    'py_hw2/p3',
+    'py_hw2/p4',
+    'py_hw2/p5',
+    'py_hw2/p6',
+    'py_hw2/p7',
+    'py_hw2/p8',
+]
+
+[groups.math2]
+code_tab_enabled = false
+math_tab_enabled = true
+chat_tab_enabled = false
+math_available_problem = [
+    'math_hw2/p1',
+    'math_hw2/p2',
+    'math_hw2/p3',
+    'math_hw2/p4',
+]
+
+
+[groups.pyr]
+code_tab_enabled = true
+math_tab_enabled = false
+chat_tab_enabled = false
+code_available_problem = [
+    "py_review/p1",
+    "py_review/p2",
+    "py_review/p3",
+    "py_review/p4",
+    "py_review/p5",
+    "py_review/p6",
+    "py_review/p7",
+    "py_review/p8",
+    "py_review/p9",
+    "py_review/p10",
+    "py_review/p11",
+    "py_review/p12",
+    "py_review/p13",
+    "py_review/p14",
+    "py_review/p15",
+    "py_review/p16",
+    "py_review/p17",
+    "py_review/p18",
+    "py_review/p19",
+    "py_review/p20",
+    "py_review/p21",
+    "py_review/p22",
+    "py_review/p23",
+    "py_review/p24",
+    "py_review/p25",
+    "py_review/p26",
+    "py_review/p27",
+    "py_review/p28",
+    "py_review/p29",
+    "py_review/p30",
+    "py_review/p31",
+    "py_review/p32"
+]
+
+[groups.pyrgpt]
+code_tab_enabled = true
+math_tab_enabled = false
+chat_tab_enabled = true
+code_available_problem = [
+    "py_review/p1",
+    "py_review/p2",
+    "py_review/p3",
+    "py_review/p4",
+    "py_review/p5",
+    "py_review/p6",
+    "py_review/p7",
+    "py_review/p8",
+    "py_review/p9",
+    "py_review/p10",
+    "py_review/p11",
+    "py_review/p12",
+    "py_review/p13",
+    "py_review/p14",
+    "py_review/p15",
+    "py_review/p16",
+    "py_review/p17",
+    "py_review/p18",
+    "py_review/p19",
+    "py_review/p20",
+    "py_review/p21",
+    "py_review/p22",
+    "py_review/p23",
+    "py_review/p24",
+    "py_review/p25",
+    "py_review/p26",
+    "py_review/p27",
+    "py_review/p28",
+    "py_review/p29",
+    "py_review/p30",
+    "py_review/p31",
+    "py_review/p32"
+]
+
+
+
+[groups.mathr]
+code_tab_enabled = false
+math_tab_enabled = true
+chat_tab_enabled = false
+math_available_problem = [
+    "math_review/p1",
+    "math_review/p2",
+    "math_review/p3",
+    "math_review/p4",
+    "math_review/p5",
+    "math_review/p6",
+    "math_review/p7",
+    "math_review/p8",
+    "math_review/p9",
+    "math_review/p10"
+]
+
+[groups.mathrgpt]
+code_tab_enabled = false
+math_tab_enabled = true
+chat_tab_enabled = true
+math_available_problem = [
+    "math_review/p1",
+    "math_review/p2",
+    "math_review/p3",
+    "math_review/p4",
+    "math_review/p5",
+    "math_review/p6",
+    "math_review/p7",
+    "math_review/p8",
+    "math_review/p9",
+    "math_review/p10",
+]

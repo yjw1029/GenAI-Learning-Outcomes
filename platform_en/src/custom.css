@@ -1,0 +1,54 @@
+footer {display: none !important;}
+.gradio-container {
+    margin: 0 !important;
+    max-width: 100% !important;
+}
+footer#ms {
+    display: block !important;
+    text-align: center !important;
+}
+.chat_box {
+    /* position: fixed !important; */
+    /* width: 30% !important; */
+    overflow: auto;
+    height: 100vh;
+}
+.achat .chatbot {
+    font-size: small !important;
+}
+#msg {
+    height: 20vh;
+    overflow: auto;
+}
+.problem-tried {
+    background-color: #f0ad4e !important;
+}
+.problem-solved {
+    background-color: #dff0d8 !important;
+}
+.problem-saved {
+    background-color: #d9edf7 !important;
+}
+code {
+    white-space: pre !important;
+}
+#step_gen_button{
+    background-color: #ff4d4d !important;
+    color: white !important;
+}
+#inline-tabs-with-chat {
+    #python-button {
+        display: block !important;
+    }
+    #chat-button {
+        display: block !important;
+    }
+}
+#inline-tabs-without-chat {
+    #python-button {
+        display: block !important;
+    }
+    #chat-button {
+        display: none !important;
+    }
+}
