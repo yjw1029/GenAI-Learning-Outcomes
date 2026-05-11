@@ -1875,7 +1875,7 @@ def _plot_behavior_vs_exp_lines_combined(
                 group_a_mask=exp_mask,
                 group_b_mask=proactive_critic_mask,
                 group_a_label="Experiment",
-                group_b_label="Verification",
+                group_b_label="Proactive & Critic",
             )
         )
 
@@ -1896,7 +1896,7 @@ def _plot_behavior_vs_exp_lines_combined(
 
     all_means: list[float] = []
     for stats_df, pro_df in zip(stats_tables, passive_tables):
-        for col in ["Experiment_Mean", "Verification_Mean"]:
+        for col in ["Experiment_Mean", "Proactive & Critic_Mean"]:
             if col in stats_df.columns:
                 all_means.extend([v for v in stats_df[col].tolist() if pd.notna(v)])
         if "Passive_Mean" in pro_df.columns:
@@ -1929,14 +1929,14 @@ def _plot_behavior_vs_exp_lines_combined(
         )
         ax.plot(
             x_values,
-            stats_df["Verification_Mean"],
+            stats_df["Proactive & Critic_Mean"],
             marker="o",
             linestyle="-",
             color=proactive_critic_color,
             markersize=6,
             linewidth=1.6,
             alpha=0.85,
-            label="Verification",
+            label="Proactive & Critic",
             zorder=3,
         )
         ax.plot(
@@ -1992,7 +1992,7 @@ def _plot_behavior_vs_exp_lines_combined(
             ),
             plt.Line2D([0], [0], marker="^", linestyle=":", color=passive_color, markersize=6, linewidth=1.6),
         ],
-        labels=["Experimental", "Verification", "Passive"],
+        labels=["Experimental", "Proactive & Critic", "Passive"],
         loc="upper center",
         bbox_to_anchor=(0.5, 0.98),
         ncol=3,
