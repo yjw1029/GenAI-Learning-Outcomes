@@ -115,6 +115,21 @@ def _perm_test_pvalue(
     return (count + 1) / (n_perm + 1)
 
 
+def _bh_adjust(pvals: list[float]) -> list[float]:
+    m = len(pvals)
+    if m == 0:
+        return []
+    order = sorted(range(m), key=lambda i: pvals[i])
+    adjusted = [1.0] * m
+    prev = 1.0
+    for rank, idx in enumerate(reversed(order), start=1):
+        original_rank = m - rank + 1
+        val = min(prev, pvals[idx] * m / original_rank)
+        adjusted[idx] = min(1.0, val)
+        prev = val
+    return adjusted
+
+
 def print_control_vs_exp_tests(
     *,
     control_hw: list[float],
@@ -207,6 +222,7 @@ def plot_control_vs_exp_behaviors_hw1(
 
     counts = [len(values) for values in filtered_data]
     means = [statistics.mean(values) if values else float("nan") for values in filtered_data]
+    adjusted_p_by_label: dict[str, float] = {}
 
     control_color = "#C9C9C9"
     exp_blues = ["#c6dbef", "#9ecae1", "#6baed6", "#2171b5"]
@@ -270,7 +286,7 @@ def plot_control_vs_exp_behaviors_hw1(
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
     ax.set_xlabel("")
-    ax.set_ylabel("Assignment Score")
+    ax.set_ylabel("Assignment score")
     ax.set_xlim(0.4, float(len(filtered_data)) + 0.6)
     ax.grid(False)
 
@@ -279,17 +295,12 @@ def plot_control_vs_exp_behaviors_hw1(
     if all_points:
         y_min, y_max = float(min(all_points)), float(max(all_points))
         span = max(1e-9, y_max - y_min)
-        ax.set_ylim(max(0.0, y_min - 0.18 * span), y_max + 0.20 * span)
+        ax.set_ylim(max(0.0, y_min - 0.06 * span), y_max + 0.105 * span)
 
     try:
         scipy_stats = _try_import_stats()
         control = filtered_data[0] if filtered_data else []
         if len(control) >= 2 and span is not None:
-            def _fmt_p(p: float) -> str:
-                if p < 0.005:
-                    return "p<0.01"
-                return f"p={p:.2f}"
-
             pairs: list[tuple[int, float]] = []
             for j in range(2, len(group_names) + 1):
                 values = filtered_data[j - 1]
@@ -309,32 +320,55 @@ def plot_control_vs_exp_behaviors_hw1(
                     p = float(_perm_test_pvalue(values, control, n_perm=10000, stat="mean"))
                 pairs.append((j, p))
 
-            if all_points and pairs:
-                y_min, y_max = float(min(all_points)), float(max(all_points))
-                span = max(1e-9, y_max - y_min)
-                y0, _ = ax.get_ylim()
-                step = 0.12 * span
-                ax.set_ylim(y0, y_max + 0.20 * span + 0.18 * span + step * len(pairs))
-                line_y = y_max + 0.24 * span
-                for j, p in sorted(pairs, key=lambda item: item[0]):
-                    color = "#111111" if round(p, 2) <= 0.05 else "#9A9A9A"
-                    x1 = float(positions[0])
-                    x2 = float(positions[j - 1])
-                    ax.plot([x1, x2], [line_y, line_y], lw=1.1, c=color, solid_capstyle="butt")
-                    ax.text((x1 + x2) / 2, line_y + 0.010 * span, _fmt_p(p), ha="center", va="bottom", color=color, fontsize=9)
-                    line_y += step
+            if pairs:
+                p_bh = _bh_adjust([p for _j, p in pairs])
+                for (j, _p_raw), p_adj in sorted(zip(pairs, p_bh), key=lambda item: item[0][0]):
+                    adjusted_p_by_label[group_names[j - 1]] = float(p_adj)
     except Exception:
         pass
+
+    def _sig_marker(p: Optional[float]) -> str:
+        if p is None or math.isnan(p):
+            return "ns"
+        if p < 0.001:
+            return "***"
+        if p < 0.01:
+            return "**"
+        if p < 0.05:
+            return "*"
+        return "ns"
+
+    if all_points:
+        y_min, y_max = float(min(all_points)), float(max(all_points))
+        y0, y1 = ax.get_ylim()
+        y_span = max(1e-9, y1 - y0)
+        y_sig = y_max + 0.083 * y_span
+        y_mu = y_max + 0.040 * y_span
+        for pos, mean_val, name in zip(positions, means, labels):
+            if math.isnan(mean_val):
+                continue
+            marker = "" if name == "Control" else _sig_marker(adjusted_p_by_label.get(name))
+            if marker:
+                ax.text(pos, y_sig, marker, ha="center", va="center", fontsize=11, color="#111111", zorder=5)
+            ax.text(pos, y_mu, f"\u03bc={mean_val:.2f}", ha="center", va="center", fontsize=11, color="#111111", zorder=5)
 
     try:
         from matplotlib.patches import Patch  # type: ignore
 
-        legend_labels = []
-        for n, mean in zip(counts, means):
-            mean_str = "NA" if math.isnan(mean) else f"{mean:.2f}"
-            legend_labels.append(f"n={n}, μ={mean_str}")
+        legend_labels = [f"{name}: n={n}" for name, n in zip(labels, counts)]
         handles = [Patch(facecolor=color, edgecolor="none", label=label) for color, label in zip(colors, legend_labels)]
-        ax.legend(handles=handles, loc="upper center", bbox_to_anchor=(0.5, -0.35), ncol=3, frameon=False, borderaxespad=0.0, fontsize=12)
+        ax.legend(
+            handles=handles,
+            loc="upper center",
+            bbox_to_anchor=(0.5, -0.29),
+            ncol=3,
+            frameon=False,
+            borderaxespad=0.0,
+            fontsize=12,
+            columnspacing=1.35,
+            handlelength=1.6,
+            handletextpad=0.6,
+        )
         fig.tight_layout(rect=[0.0, 0.12, 1.0, 1.0])
     except Exception:
         fig.tight_layout()
@@ -388,9 +422,9 @@ def build_python_hw1_behavior_score_groups(python_df: pd.DataFrame) -> tuple[lis
     )
 
     display_name = {
-        "no_chat": "Unaided",
-        "mindless_copy": "Rote-Adoption",
-        "try_then_ask": "Active-Trial",
+        "no_chat": "Abstention",
+        "mindless_copy": "Rote-adoption",
+        "try_then_ask": "Active-trial",
         "ask_then_explain": "Verification",
     }
     behavior_order = ["no_chat", "mindless_copy", "try_then_ask", "ask_then_explain"]
@@ -421,10 +455,10 @@ def build_math_hw1_behavior_score_groups(math_df: pd.DataFrame) -> tuple[list[fl
     )
 
     display_name = {
-        "no_chat": "Unaided",
-        "mindless_copy": "Rote-Adoption",
-        "fix_after_wrong": "Error-Correction",
-        "try_then_ask": "Active-Trial",
+        "no_chat": "Abstention",
+        "mindless_copy": "Rote-adoption",
+        "fix_after_wrong": "Error-correction",
+        "try_then_ask": "Active-trial",
         "challenge_wrong": "Verification",
         "ask_then_explain": "Verification",
     }
@@ -457,7 +491,7 @@ def generate_hw1_behavior_assignment_plots(*, figures_dir: Path, show_figures: b
     plot_control_vs_exp_behaviors_hw1(
         control_hw=py_control,
         exp_hw_by_behavior=py_exp,
-        exp_label_to_color={"Active-Trial": "#a1d99b", "Verification": "#31a354"},
+        exp_label_to_color={"Active-trial": "#a1d99b", "Verification": "#31a354"},
         out_pdf=figures_dir / "a1_hw1_control_vs_exp_behavior.pdf",
         show=show_figures,
     )
@@ -470,8 +504,8 @@ def generate_hw1_behavior_assignment_plots(*, figures_dir: Path, show_figures: b
         exp_hw_by_behavior=math_exp,
         exp_label_to_color={
             "Verification": "#238b45",
-            "Error-Correction": "#74c476",
-            "Active-Trial": "#a1d99b",
+            "Error-correction": "#74c476",
+            "Active-trial": "#a1d99b",
         },
         out_pdf=figures_dir / "a1_math_hw1_control_vs_exp_behavior.pdf",
         show=show_figures,

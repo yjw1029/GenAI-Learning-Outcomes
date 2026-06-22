@@ -9,8 +9,10 @@ from __future__ import annotations
 from analyze.behavior.a1_processing import (
     MATH_BEHAVIOR_LABELS,
     MATH_BEHAVIOR_ORDER,
+    MATH_A1_PRECEDENCE,
     PY_BEHAVIOR_LABELS,
     PY_BEHAVIOR_ORDER,
+    PYTHON_A1_PRECEDENCE,
     ChatLabel,
     ChatLabelMath,
     UserFeatures,

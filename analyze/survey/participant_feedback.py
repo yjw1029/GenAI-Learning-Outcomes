@@ -24,6 +24,13 @@ from matplotlib.patches import Patch
 from dataclasses import dataclass
 
 from analyze.utils.display import relative_path
+import analyze.behavior.a1 as behavior_a1
+from analyze.behavior.category_rules import (
+    MATH_A1_PRECEDENCE,
+    PYTHON_A1_PRECEDENCE,
+    pick_math_a1_category,
+    pick_python_a1_category,
+)
 
 # Add project root to path. Jupyter does not define __file__, so locate the
 # repository from the current working directory when running as a notebook.
@@ -111,20 +118,12 @@ FINAL_ANSWER_TYPES = {"answer"}
 
 TRIED_THRESHOLD = 0.25
 COPY_FIRST_THRESHOLD = 0.75
-PRECEDENCE = ("no_chat", "ask_then_explain", "try_then_ask", "mindless_copy", "other")
+PRECEDENCE = PYTHON_A1_PRECEDENCE
 
 MATH_TRIED_THRESHOLD = 0.5
 MATH_COPY_FIRST_THRESHOLD = 0.5
 MATH_PRETRY_BLANK_PROP_THRESHOLD = 0.8
-MATH_PRECEDENCE = (
-    "no_chat",
-    "challenge_wrong",
-    "fix_after_wrong",
-    "ask_then_explain",
-    "try_then_ask",
-    "mindless_copy",
-    "other",
-)
+MATH_PRECEDENCE = MATH_A1_PRECEDENCE
 MATH_VERBATIM_MODES = VERBATIM_MODES
 
 PROACTIVE_CRITIC_COLOR = "#31a354"
@@ -393,18 +392,18 @@ def map_likert_scale_values(df: pd.DataFrame) -> pd.DataFrame:
             df[col] = df[col].map(mapping)
 
     friendly_names = {
-        "人工判断性能_0": "Response Accuracy",
-        "人工判断性能_1": "Question Comprehension",
-        "人工判断性能_2": "Response Personalization",
-        "人工判断性能_3": "Learning Progress Awareness",
-        "人工判断性能_4": "Course Learning Effectiveness",
-        "人工判断性能_5": "Assignment Effectiveness",
-        "人工判断性能_6": "Review Effectiveness",
-        "人工判断性能_7": "Exam Effectiveness",
+        "人工判断性能_0": "Response accuracy",
+        "人工判断性能_1": "Question comprehension",
+        "人工判断性能_2": "Response personalization",
+        "人工判断性能_3": "Learning progress awareness",
+        "人工判断性能_4": "Course learning effectiveness",
+        "人工判断性能_5": "Assignment effectiveness",
+        "人工判断性能_6": "Review effectiveness",
+        "人工判断性能_7": "Exam effectiveness",
         "人工判断性能_8": "Politeness",
         "人工判断性能_9": "Patience",
         "人工判断性能_10": "Enjoyability",
-        "人工判断性能_11": "Exploration Encouragement",
+        "人工判断性能_11": "Exploration encouragement",
     }
 
     return df.rename(columns=friendly_names)
@@ -793,23 +792,15 @@ def _pick_a1_category(
     copy_first_threshold: float = COPY_FIRST_THRESHOLD,
     precedence: tuple[str, ...] = PRECEDENCE,
 ) -> str:
-    def _match(cat: str) -> bool:
-        if cat == "no_chat":
-            return n_chats == 0
-        if cat == "ask_then_explain":
-            return n_chats > 0 and ask_then_explain
-        if cat == "try_then_ask":
-            return n_chats > 0 and tried_rate_problem >= tried_threshold
-        if cat == "mindless_copy":
-            return n_chats > 0 and mindless_copy_rate_problem >= copy_first_threshold
-        if cat == "other":
-            return True
-        raise ValueError(f"Unknown category: {cat}")
-
-    for cat in precedence:
-        if _match(cat):
-            return cat
-    return "other"
+    return pick_python_a1_category(
+        n_chats=n_chats,
+        tried_rate_problem=tried_rate_problem,
+        mindless_copy_rate_problem=mindless_copy_rate_problem,
+        ask_then_explain=ask_then_explain,
+        tried_threshold=tried_threshold,
+        copy_first_threshold=copy_first_threshold,
+        precedence=precedence,
+    )
 
 
 def compute_python_a1_behavior_groups(
@@ -823,70 +814,37 @@ def compute_python_a1_behavior_groups(
     problem_denom_policy: str = "attempted_or_chatted",
     nochat_tried_if_attempted: bool = True,
 ) -> dict[str, str]:
-    labels_by_user = _load_json(labels_path)
-    details_by_user = _load_json(python_details_path)
-    target_problems = _infer_target_problems_from_labels(labels_by_user, stage=stage, problem_prefix=problem_prefix)
-
-    out: dict[str, str] = {}
-    for uid in usernames:
-        chats = _iter_user_a1_chat_labels(
-            labels_by_user,
-            uid,
-            stage=stage,
-            problem_prefix=problem_prefix,
-            drop_unk_ask=drop_unk_ask,
-        )
-
-        by_prob: dict[str, list[_A1ChatLabel]] = {}
-        for c in chats:
-            by_prob.setdefault(c.problem, []).append(c)
-
-        attempted_map = _attempted_map_python(details_by_user, uid)
-
-        if problem_denom_policy == "attempted_or_chatted":
-            for p in target_problems:
-                if p not in by_prob and attempted_map.get(p, False):
-                    by_prob[p] = []
-        elif problem_denom_policy == "all_in_problem_set":
-            for p in target_problems:
-                by_prob.setdefault(p, [])
-        elif problem_denom_policy != "chatted_only":
-            raise ValueError(f"Unknown problem_denom_policy: {problem_denom_policy}")
-
-        if not by_prob:
-            out[uid] = "no_chat"
-            continue
-
-        per_problem = []
-        for p, seq in by_prob.items():
-            attempted_without_chat = bool(attempted_map.get(p, False)) and (len(seq) == 0)
-            per_problem.append(
-                _compute_single_problem_features(
-                    seq,
-                    attempted_without_chat=attempted_without_chat,
-                    nochat_tried_if_attempted=nochat_tried_if_attempted,
-                )
-            )
-
-        n_chats = sum(int(f.get("n_chats") or 0) for f in per_problem)
-        tried_rate_problem = (
-            sum(1 for f in per_problem if f.get("tried_any") is True) / len(per_problem) if per_problem else 0.0
-        )
-        mindless_copy_rate_problem = (
-            sum(1 for f in per_problem if f.get("mindless_copy") is True) / len(per_problem)
-            if per_problem
-            else 0.0
-        )
-        ask_then_explain = any(f.get("ask_then_explain") is True for f in per_problem)
-
-        out[uid] = _pick_a1_category(
-            n_chats=int(n_chats),
-            tried_rate_problem=float(tried_rate_problem),
-            mindless_copy_rate_problem=float(mindless_copy_rate_problem),
-            ask_then_explain=bool(ask_then_explain),
-        )
-
-    return out
+    labels_by_user = behavior_a1.load_json(labels_path)
+    details_by_user = behavior_a1.load_json(python_details_path)
+    scores = {uid: {"group": "Experiment"} for uid in usernames}
+    target_problems = behavior_a1.infer_target_problems_from_labels(
+        labels_by_user,
+        stage=stage,
+        problem_prefix=problem_prefix,
+    )
+    user_problem_chats = behavior_a1.build_user_problem_chats(
+        labels_by_user,
+        scores,
+        details_by_user,
+        group="Experiment",
+        stage=stage,
+        problem_prefix=problem_prefix,
+        drop_unk_ask=drop_unk_ask,
+        target_problems=target_problems,
+        problem_denom_policy=problem_denom_policy,
+        excluded_users=set(),
+    )
+    attempted_without_chat = behavior_a1.build_user_problem_attempted_map(user_problem_chats, details_by_user)
+    feats_by_user = behavior_a1.compute_all_user_features(
+        user_problem_chats,
+        attempted_without_chat,
+        scores,
+        tried_threshold=TRIED_THRESHOLD,
+        copy_first_threshold=COPY_FIRST_THRESHOLD,
+        precedence=behavior_a1.PYTHON_A1_PRECEDENCE,
+        nochat_tried_if_attempted=nochat_tried_if_attempted,
+    )
+    return {uid: feat.category for uid, feat in feats_by_user.items()}
 
 
 def _iter_user_math_chat_labels(
@@ -973,14 +931,15 @@ def _compute_single_problem_features_math(
 
     seq = sorted(seq, key=lambda c: c.timestamp)
     pretry_rate = _pretry_rate_for_problem(problem_id, seq)
-    if pretry_rate is None:
-        tried_any = any(c.pre_tried == LABEL_TRIED_Y for c in seq)
-    else:
-        tried_any = pretry_rate >= pretry_blank_prop_threshold
-
     any_answer_request = any(
         ((c.ask_type in FINAL_ANSWER_TYPES) or (c.ask_goal in FINAL_ANSWER_GOALS)) for c in seq
     )
+    if not any_answer_request:
+        tried_any = True
+    elif pretry_rate is None:
+        tried_any = any(c.pre_tried == LABEL_TRIED_Y for c in seq)
+    else:
+        tried_any = pretry_rate >= pretry_blank_prop_threshold
     any_post_verbatim = any(c.post_mode in MATH_VERBATIM_MODES for c in seq)
 
     seen_answer = False
@@ -1030,27 +989,17 @@ def _pick_math_category(
     copy_first_threshold: float = MATH_COPY_FIRST_THRESHOLD,
     precedence: tuple[str, ...] = MATH_PRECEDENCE,
 ) -> str:
-    def _match(cat: str) -> bool:
-        if cat == "no_chat":
-            return n_chats == 0
-        if cat == "ask_then_explain":
-            return n_chats > 0 and ask_then_explain
-        if cat == "challenge_wrong":
-            return n_chats > 0 and challenge_wrong
-        if cat == "fix_after_wrong":
-            return n_chats > 0 and fix_after_wrong
-        if cat == "try_then_ask":
-            return n_chats > 0 and tried_rate_problem >= tried_threshold
-        if cat == "mindless_copy":
-            return n_chats > 0 and mindless_copy_rate_problem >= copy_first_threshold
-        if cat == "other":
-            return True
-        raise ValueError(f"Unknown category: {cat}")
-
-    for cat in precedence:
-        if _match(cat):
-            return cat
-    return "other"
+    return pick_math_a1_category(
+        n_chats=n_chats,
+        tried_rate_problem=tried_rate_problem,
+        mindless_copy_rate_problem=mindless_copy_rate_problem,
+        ask_then_explain=ask_then_explain,
+        challenge_wrong=challenge_wrong,
+        fix_after_wrong=fix_after_wrong,
+        tried_threshold=tried_threshold,
+        copy_first_threshold=copy_first_threshold,
+        precedence=precedence,
+    )
 
 
 def compute_math_a1_behavior_groups(
@@ -1065,105 +1014,46 @@ def compute_math_a1_behavior_groups(
     nochat_tried_if_attempted: bool = True,
     pretry_blank_prop_threshold: float = MATH_PRETRY_BLANK_PROP_THRESHOLD,
 ) -> dict[str, str]:
-    labels_by_user = _load_json(labels_path)
-    details_by_user = _load_json(math_details_path)
-    target_problems = _infer_target_problems_from_labels(labels_by_user, stage=stage, problem_prefix=problem_prefix)
-
-    out: dict[str, str] = {}
-    for uid in usernames:
-        chats = _iter_user_math_chat_labels(
+    labels_by_user = behavior_a1.load_json(labels_path)
+    details_by_user = behavior_a1.load_json(math_details_path)
+    scores = {uid: {"group": "Experiment"} for uid in usernames}
+    target_problems = behavior_a1.infer_target_problems_from_labels(
+        labels_by_user,
+        stage=stage,
+        problem_prefix=problem_prefix,
+    )
+    old_threshold = behavior_a1._compute_single_problem_features_math.__globals__["PRETRY_BLANK_PROP_THRESHOLD"]
+    behavior_a1._compute_single_problem_features_math.__globals__[
+        "PRETRY_BLANK_PROP_THRESHOLD"
+    ] = pretry_blank_prop_threshold
+    try:
+        user_problem_chats = behavior_a1.build_user_problem_chats_math(
             labels_by_user,
-            uid,
+            scores,
+            details_by_user,
+            group="Experiment",
             stage=stage,
             problem_prefix=problem_prefix,
             drop_unk_ask=drop_unk_ask,
+            target_problems=target_problems,
+            problem_denom_policy=problem_denom_policy,
+            excluded_users=set(),
         )
-
-        by_prob: dict[str, list[_MathChatLabel]] = {}
-        for c in chats:
-            by_prob.setdefault(c.problem, []).append(c)
-
-        drec = details_by_user.get(uid, {}) if isinstance(details_by_user.get(uid, {}), dict) else {}
-
-        def _attempted(problem_id: str) -> bool:
-            prec = drec.get(problem_id, {})
-            return isinstance(prec, dict) and prec.get("user_answer") is not None
-
-        if problem_denom_policy == "attempted_or_chatted":
-            for p in target_problems:
-                if p not in by_prob and _attempted(p):
-                    by_prob[p] = []
-        elif problem_denom_policy == "all_in_problem_set":
-            for p in target_problems:
-                by_prob.setdefault(p, [])
-        elif problem_denom_policy != "chatted_only":
-            raise ValueError(f"Unknown problem_denom_policy: {problem_denom_policy}")
-
-        if not by_prob:
-            out[uid] = "no_chat"
-            continue
-
-        per_problem = []
-        for p, seq in by_prob.items():
-            attempted_without_chat = bool(_attempted(p)) and (len(seq) == 0)
-            per_problem.append(
-                _compute_single_problem_features_math(
-                    seq,
-                    problem_id=p,
-                    attempted_without_chat=attempted_without_chat,
-                    nochat_tried_if_attempted=nochat_tried_if_attempted,
-                    pretry_blank_prop_threshold=pretry_blank_prop_threshold,
-                )
-            )
-
-        n_chats = sum(int(f.get("n_chats") or 0) for f in per_problem)
-
-        eligible = [f for f in per_problem if f.get("eligible_for_rates", True)]
-        denom = len(eligible)
-        if denom == 0:
-            tried_rate_problem = 0.0
-            mindless_copy_rate_problem = 0.0
-            ask_then_explain = False
-        else:
-            tried_rate_problem = sum(1 for f in eligible if f.get("tried_any") is True) / denom
-            mindless_copy_rate_problem = sum(1 for f in eligible if f.get("mindless_copy") is True) / denom
-            ask_then_explain = any(f.get("ask_then_explain") is True for f in eligible)
-
-        all_chats = [c for seq in by_prob.values() for c in seq]
-        if not all_chats:
-            challenge_wrong = False
-            fix_after_wrong = False
-        else:
-            challenge_wrong = any((c.ask_type == "challenge" and c.llm_wrong) for c in all_chats)
-            fix_after_wrong = False
-            for seq in by_prob.values():
-                llm_correct: set[str] = set()
-                llm_wrong: set[str] = set()
-                post_correct: set[str] = set()
-                pre_correct: set[str] = set()
-                for c in seq:
-                    c_ok, c_bad = _blanks_by_correct(c.ask_blanks)
-                    llm_correct.update(c_ok)
-                    llm_wrong.update(c_bad)
-                    p_ok, _p_bad = _blanks_by_correct(c.post_blanks)
-                    post_correct.update(p_ok)
-                    pre_ok, _pre_bad = _blanks_by_correct(c.pre_blanks)
-                    pre_correct.update(pre_ok)
-                candidate = (llm_wrong - llm_correct) & post_correct & (set(post_correct) - pre_correct)
-                if candidate:
-                    fix_after_wrong = True
-                    break
-
-        out[uid] = _pick_math_category(
-            n_chats=int(n_chats),
-            tried_rate_problem=float(tried_rate_problem),
-            mindless_copy_rate_problem=float(mindless_copy_rate_problem),
-            ask_then_explain=bool(ask_then_explain),
-            challenge_wrong=bool(challenge_wrong),
-            fix_after_wrong=bool(fix_after_wrong),
+        attempted_without_chat = behavior_a1.build_user_problem_attempted_map_math(user_problem_chats, details_by_user)
+        feats_by_user = behavior_a1.compute_all_user_features_math(
+            user_problem_chats,
+            attempted_without_chat,
+            scores,
+            tried_threshold=MATH_TRIED_THRESHOLD,
+            copy_first_threshold=MATH_COPY_FIRST_THRESHOLD,
+            precedence=behavior_a1.MATH_A1_PRECEDENCE,
+            nochat_tried_if_attempted=nochat_tried_if_attempted,
         )
-
-    return out
+    finally:
+        behavior_a1._compute_single_problem_features_math.__globals__[
+            "PRETRY_BLANK_PROP_THRESHOLD"
+        ] = old_threshold
+    return {uid: feat.category for uid, feat in feats_by_user.items()}
 
 
 def _compute_behavior_supergroup(
@@ -1177,7 +1067,7 @@ def _compute_behavior_supergroup(
             return "proactive_critic"
         if cat in passive_categories:
             return "passive"
-        return "other"
+        return "passive"
 
     return series.map(_map)
 
@@ -1468,18 +1358,18 @@ def plot_likert_point_ci_by_course(
 
     plot_df = pd.DataFrame(records)
     manual_labels = {
-        "Response Accuracy": "Response\nAccuracy",
-        "Question Comprehension": "Question\nComprehension",
-        "Response Personalization": "Response\nPersonalization",
-        "Learning Progress Awareness": "Learning Progress\nAwareness",
-        "Course Learning Effectiveness": "Course Learning\nEffectiveness",
-        "Assignment Effectiveness": "Assignment\nEffectiveness",
-        "Review Effectiveness": "Review\nEffectiveness",
-        "Exam Effectiveness": "Exam\nEffectiveness",
+        "Response accuracy": "Response\nAccuracy",
+        "Question comprehension": "Question\nComprehension",
+        "Response personalization": "Response\nPersonalization",
+        "Learning progress awareness": "Learning Progress\nAwareness",
+        "Course learning effectiveness": "Course Learning\nEffectiveness",
+        "Assignment effectiveness": "Assignment\nEffectiveness",
+        "Review effectiveness": "Review\nEffectiveness",
+        "Exam effectiveness": "Exam\nEffectiveness",
         "Politeness": "Politeness",
         "Patience": "Patience",
         "Enjoyability": "Enjoyability",
-        "Exploration Encouragement": "Exploration\nEncouragement",
+        "Exploration encouragement": "Exploration\nEncouragement",
     }
     plot_df["item_wrapped"] = plot_df["item"].apply(lambda s: manual_labels.get(s, s))
 
@@ -1592,18 +1482,18 @@ def plot_likert_point_ci_by_behavior(
 
     plot_df = pd.DataFrame(records)
     manual_labels = {
-        "Response Accuracy": "Response\nAccuracy",
-        "Question Comprehension": "Question\nComprehension",
-        "Response Personalization": "Response\nPersonalization",
-        "Learning Progress Awareness": "Learning Progress\nAwareness",
-        "Course Learning Effectiveness": "Course Learning\nEffectiveness",
-        "Assignment Effectiveness": "Assignment\nEffectiveness",
-        "Review Effectiveness": "Review\nEffectiveness",
-        "Exam Effectiveness": "Exam\nEffectiveness",
+        "Response accuracy": "Response\nAccuracy",
+        "Question comprehension": "Question\nComprehension",
+        "Response personalization": "Response\nPersonalization",
+        "Learning progress awareness": "Learning Progress\nAwareness",
+        "Course learning effectiveness": "Course Learning\nEffectiveness",
+        "Assignment effectiveness": "Assignment\nEffectiveness",
+        "Review effectiveness": "Review\nEffectiveness",
+        "Exam effectiveness": "Exam\nEffectiveness",
         "Politeness": "Politeness",
         "Patience": "Patience",
         "Enjoyability": "Enjoyability",
-        "Exploration Encouragement": "Exploration\nEncouragement",
+        "Exploration encouragement": "Exploration\nEncouragement",
     }
     plot_df["item_wrapped"] = plot_df["item"].apply(lambda s: manual_labels.get(s, s))
 
@@ -1819,7 +1709,7 @@ def plot_willingness_delta_violin_box(
     df_att: pd.DataFrame,
     *,
     title: str | None = None,
-    out_ylabel: str = "Δ Willingness",
+    out_ylabel: str = "Δ willingness",
     control_label: str = "Control",
     exp_label: str = "Experimental",
     control_color: str = CONTROL_COLOR,
@@ -1917,7 +1807,7 @@ def plot_willingness_delta_violin_box(
         plt.tight_layout()
     return fig, ax
 
-_FEEDBACK_RUN_SOURCE = '# =========================\n# Block 1: Load and map data\n# =========================\ndf = load_postsurvey_data()\ndf = map_likert_scale_values(df)\ndf = map_multiselect_values(df)\nset_nature_style()\n\nprint("\\n" + "=" * 60)\nprint("Generating Feedback Analysis Plots")\nprint("=" * 60)\n\n \n\n\n# =========================\n# Block 2: Likert point + 95% CI plots\n# =========================\nlikert_items = [\n    "Response Accuracy",\n    "Question Comprehension",\n    "Response Personalization",\n    "Learning Progress Awareness",\n    "Course Learning Effectiveness",\n    "Assignment Effectiveness",\n    "Review Effectiveness",\n    "Exam Effectiveness",\n    "Politeness",\n    "Patience",\n    "Enjoyability",\n    "Exploration Encouragement",\n]\n\nprint("\\nGenerating: feedback-likert-python-math.pdf")\nfig, _ = plot_likert_point_ci_by_course(\n    df,\n    items=likert_items,\n    title="LLM Feedback by Course (mean ± 95% CI)",\n    course_colors={"python": "#4C72B0", "math": "#DD8452"},\n)\n_save_and_maybe_show(fig, FIGURES_DIR / "feedback-likert-python-math.pdf")\n\n\n# =========================\n# Block 3: Multi-select pie plots\n# =========================\nif "目的_1" in df.columns:\n    fig, _ = plot_multi_select_pie(df, "目的_1")\n    _save_and_maybe_show(fig, FIGURES_DIR / "feedback-objectives.pdf")\n\nif "目的_3" in df.columns:\n    fig, _ = plot_multi_select_pie(df, "目的_3")\n    _save_and_maybe_show(fig, FIGURES_DIR / "feedback-methods.pdf")\n\nif "目的_2" in df.columns:\n    fig, _ = plot_multi_select_pie(df, "目的_2")\n    _save_and_maybe_show(fig, FIGURES_DIR / "feedback-effective-aspects.pdf")\n\n\n# =========================\n# Block 4: Pre/Post attitude shifts (control vs exp; python vs math)\n# =========================\ndf_att = load_prepost_attitudes()\n\ndf_math = df_att[df_att["course"] == "math"].copy()\ndf_python = df_att[df_att["course"] == "python"].copy()\n\nif not df_math.empty or not df_python.empty:\n    print("\\nGenerating: feedback-willingness-delta-combined.pdf")\n    fig_w, axes_w = plt.subplots(1, 2, figsize=(5.8, 3.0), dpi=300, sharey=True)\n    if not df_math.empty:\n        plot_willingness_delta_violin_box(\n            df_math,\n            title=None,\n            control_label="Control",\n            exp_label="Exp",\n            show_legend=False,\n            ax=axes_w[0],\n        )\n        axes_w[0].set_ylabel("Δ Willingness")\n    if not df_python.empty:\n        plot_willingness_delta_violin_box(\n            df_python,\n            title=None,\n            control_label="Control",\n            exp_label="Exp",\n            show_legend=False,\n            ax=axes_w[1],\n        )\n        axes_w[1].set_ylabel("")\n    fig_w.tight_layout()\n    _save_and_maybe_show(fig_w, FIGURES_DIR / "feedback-willingness-delta-combined.pdf")\n\nif not df_math.empty or not df_python.empty:\n    print("\\nGenerating: feedback-risk-delta-combined.pdf")\n    fig_r, axes_r = plt.subplots(1, 2, figsize=(5.8, 3.0), dpi=300, sharey=True)\n    if not df_math.empty:\n        plot_risk_delta_by_group(\n            df_math,\n            risk_items=RISK_OVERLAP_ITEMS,\n            risk_labels=RISK_LABELS,\n            ax=axes_r[0],\n            show_legend=False,\n        )\n    if not df_python.empty:\n        plot_risk_delta_by_group(\n            df_python,\n            risk_items=RISK_OVERLAP_ITEMS,\n            risk_labels=RISK_LABELS,\n            ax=axes_r[1],\n            show_legend=False,\n        )\n\n    control_color = "#6baed6"\n    exp_color = "#31a354"\n    legend_handles = [\n        Line2D([], [], linestyle="none", label="Control"),\n        Line2D([0], [0], marker="o", color="none", markerfacecolor=control_color,\n               markeredgecolor="white", markeredgewidth=0.8, markersize=7,\n               label="  Mean"),\n        Line2D([0, 1], [0, 0], color=control_color, linewidth=2.6, label="  90% CI"),\n        Line2D([0, 1], [0, 0], color=control_color, linewidth=1.2, label="  95% CI"),\n        Line2D([], [], linestyle="none", label="Exp"),\n        Line2D([0], [0], marker="o", color="none", markerfacecolor=exp_color,\n               markeredgecolor="white", markeredgewidth=0.8, markersize=7,\n               label="  Mean"),\n        Line2D([0, 1], [0, 0], color=exp_color, linewidth=2.6, label="  90% CI"),\n        Line2D([0, 1], [0, 0], color=exp_color, linewidth=1.2, label="  95% CI"),\n    ]\n    leg = fig_r.legend(\n        handles=legend_handles,\n        frameon=False,\n        loc="center left",\n        bbox_to_anchor=(0.96, 0.5),\n        ncol=1,\n        columnspacing=1.2,\n        handletextpad=0.6,\n    )\n    if leg is not None:\n        control_label_color = _darken_color(control_color, 0.8)\n        exp_label_color = _darken_color(exp_color, 0.8)\n        for text in leg.get_texts():\n            if text.get_text() == "Control":\n                text.set_color(control_label_color)\n            elif text.get_text() == "Exp":\n                text.set_color(exp_label_color)\n    fig_r.tight_layout()\n    _save_and_maybe_show(fig_r, FIGURES_DIR / "feedback-risk-delta-combined.pdf")\n\nprint("\\n" + "=" * 60)\nprint("Feedback Analysis Complete")\nprint("=" * 60)\nprint("\\nDone!")\n'
+_FEEDBACK_RUN_SOURCE = '# =========================\n# Block 1: Load and map data\n# =========================\ndf = load_postsurvey_data()\ndf = map_likert_scale_values(df)\ndf = map_multiselect_values(df)\nset_nature_style()\n\nprint("\\n" + "=" * 60)\nprint("Generating Feedback Analysis Plots")\nprint("=" * 60)\n\n \n\n\n# =========================\n# Block 2: Likert point + 95% CI plots\n# =========================\nlikert_items = [\n    "Response accuracy",\n    "Question comprehension",\n    "Response personalization",\n    "Learning progress awareness",\n    "Course learning effectiveness",\n    "Assignment effectiveness",\n    "Review effectiveness",\n    "Exam effectiveness",\n    "Politeness",\n    "Patience",\n    "Enjoyability",\n    "Exploration encouragement",\n]\n\nprint("\\nGenerating: feedback-likert-python-math.pdf")\nfig, _ = plot_likert_point_ci_by_course(\n    df,\n    items=likert_items,\n    title="LLM Feedback by Course (mean ± 95% CI)",\n    course_colors={"python": "#4C72B0", "math": "#DD8452"},\n)\n_save_and_maybe_show(fig, FIGURES_DIR / "feedback-likert-python-math.pdf")\n\n\n# =========================\n# Block 3: Multi-select pie plots\n# =========================\nif "目的_1" in df.columns:\n    fig, _ = plot_multi_select_pie(df, "目的_1")\n    _save_and_maybe_show(fig, FIGURES_DIR / "feedback-objectives.pdf")\n\nif "目的_3" in df.columns:\n    fig, _ = plot_multi_select_pie(df, "目的_3")\n    _save_and_maybe_show(fig, FIGURES_DIR / "feedback-methods.pdf")\n\nif "目的_2" in df.columns:\n    fig, _ = plot_multi_select_pie(df, "目的_2")\n    _save_and_maybe_show(fig, FIGURES_DIR / "feedback-effective-aspects.pdf")\n\n\n# =========================\n# Block 4: Pre/Post attitude shifts (control vs exp; python vs math)\n# =========================\ndf_att = load_prepost_attitudes()\n\ndf_math = df_att[df_att["course"] == "math"].copy()\ndf_python = df_att[df_att["course"] == "python"].copy()\n\nif not df_math.empty or not df_python.empty:\n    print("\\nGenerating: feedback-willingness-delta-combined.pdf")\n    fig_w, axes_w = plt.subplots(1, 2, figsize=(5.8, 3.0), dpi=300, sharey=True)\n    if not df_math.empty:\n        plot_willingness_delta_violin_box(\n            df_math,\n            title=None,\n            control_label="Control",\n            exp_label="Exp",\n            show_legend=False,\n            ax=axes_w[0],\n        )\n        axes_w[0].set_ylabel("Δ willingness")\n    if not df_python.empty:\n        plot_willingness_delta_violin_box(\n            df_python,\n            title=None,\n            control_label="Control",\n            exp_label="Exp",\n            show_legend=False,\n            ax=axes_w[1],\n        )\n        axes_w[1].set_ylabel("")\n    fig_w.tight_layout()\n    _save_and_maybe_show(fig_w, FIGURES_DIR / "feedback-willingness-delta-combined.pdf")\n\nif not df_math.empty or not df_python.empty:\n    print("\\nGenerating: feedback-risk-delta-combined.pdf")\n    fig_r, axes_r = plt.subplots(1, 2, figsize=(5.8, 3.0), dpi=300, sharey=True)\n    if not df_math.empty:\n        plot_risk_delta_by_group(\n            df_math,\n            risk_items=RISK_OVERLAP_ITEMS,\n            risk_labels=RISK_LABELS,\n            ax=axes_r[0],\n            show_legend=False,\n        )\n    if not df_python.empty:\n        plot_risk_delta_by_group(\n            df_python,\n            risk_items=RISK_OVERLAP_ITEMS,\n            risk_labels=RISK_LABELS,\n            ax=axes_r[1],\n            show_legend=False,\n        )\n\n    control_color = "#6baed6"\n    exp_color = "#31a354"\n    legend_handles = [\n        Line2D([], [], linestyle="none", label="Control"),\n        Line2D([0], [0], marker="o", color="none", markerfacecolor=control_color,\n               markeredgecolor="white", markeredgewidth=0.8, markersize=7,\n               label="  Mean"),\n        Line2D([0, 1], [0, 0], color=control_color, linewidth=2.6, label="  90% CI"),\n        Line2D([0, 1], [0, 0], color=control_color, linewidth=1.2, label="  95% CI"),\n        Line2D([], [], linestyle="none", label="Exp"),\n        Line2D([0], [0], marker="o", color="none", markerfacecolor=exp_color,\n               markeredgecolor="white", markeredgewidth=0.8, markersize=7,\n               label="  Mean"),\n        Line2D([0, 1], [0, 0], color=exp_color, linewidth=2.6, label="  90% CI"),\n        Line2D([0, 1], [0, 0], color=exp_color, linewidth=1.2, label="  95% CI"),\n    ]\n    leg = fig_r.legend(\n        handles=legend_handles,\n        frameon=False,\n        loc="center left",\n        bbox_to_anchor=(0.96, 0.5),\n        ncol=1,\n        columnspacing=1.2,\n        handletextpad=0.6,\n    )\n    if leg is not None:\n        control_label_color = _darken_color(control_color, 0.8)\n        exp_label_color = _darken_color(exp_color, 0.8)\n        for text in leg.get_texts():\n            if text.get_text() == "Control":\n                text.set_color(control_label_color)\n            elif text.get_text() == "Exp":\n                text.set_color(exp_label_color)\n    fig_r.tight_layout()\n    _save_and_maybe_show(fig_r, FIGURES_DIR / "feedback-risk-delta-combined.pdf")\n\nprint("\\n" + "=" * 60)\nprint("Feedback Analysis Complete")\nprint("=" * 60)\nprint("\\nDone!")\n'
 
 def run_participant_feedback_analysis(*, figures_dir: Optional[Path] = None, show_figures: bool = False) -> dict[str, Any]:
     """Generate participant-feedback figures used by the main paper."""

@@ -26,11 +26,19 @@ import pandas as pd
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
+import seaborn as sns
 from matplotlib.gridspec import GridSpec
 import statsmodels.formula.api as smf
 from statsmodels.stats.proportion import proportions_ztest
 
 from analyze.utils.display import relative_path
+import analyze.behavior.a1 as behavior_a1
+from analyze.behavior.category_rules import (
+    MATH_A1_PRECEDENCE,
+    PYTHON_A1_PRECEDENCE,
+    pick_math_a1_category,
+    pick_python_a1_category,
+)
 
 warnings.filterwarnings(
     "ignore",
@@ -119,21 +127,13 @@ FINAL_ANSWER_TYPES = {"answer"}
 # Same defaults as analyze/a1_behavior_analyze_py.py
 TRIED_THRESHOLD = 0.25
 COPY_FIRST_THRESHOLD = 0.75
-PRECEDENCE = ("no_chat", "ask_then_explain", "try_then_ask", "mindless_copy", "other")
+PRECEDENCE = PYTHON_A1_PRECEDENCE
 
 # Math behavior analysis defaults (see analyze/a1_behavior_analyze_math.py)
 MATH_TRIED_THRESHOLD = 0.5
 MATH_COPY_FIRST_THRESHOLD = 0.5
 MATH_PRETRY_BLANK_PROP_THRESHOLD = 0.8
-MATH_PRECEDENCE = (
-    "no_chat",
-    "challenge_wrong",
-    "fix_after_wrong",
-    "ask_then_explain",
-    "try_then_ask",
-    "mindless_copy",
-    "other",
-)
+MATH_PRECEDENCE = MATH_A1_PRECEDENCE
 MATH_VERBATIM_MODES = VERBATIM_MODES
 
 
@@ -468,23 +468,15 @@ def _pick_a1_category(
     copy_first_threshold: float = COPY_FIRST_THRESHOLD,
     precedence: tuple[str, ...] = PRECEDENCE,
 ) -> str:
-    def _match(cat: str) -> bool:
-        if cat == "no_chat":
-            return n_chats == 0
-        if cat == "ask_then_explain":
-            return n_chats > 0 and ask_then_explain
-        if cat == "try_then_ask":
-            return n_chats > 0 and tried_rate_problem >= tried_threshold
-        if cat == "mindless_copy":
-            return n_chats > 0 and mindless_copy_rate_problem >= copy_first_threshold
-        if cat == "other":
-            return True
-        raise ValueError(f"Unknown category: {cat}")
-
-    for cat in precedence:
-        if _match(cat):
-            return cat
-    return "other"
+    return pick_python_a1_category(
+        n_chats=n_chats,
+        tried_rate_problem=tried_rate_problem,
+        mindless_copy_rate_problem=mindless_copy_rate_problem,
+        ask_then_explain=ask_then_explain,
+        tried_threshold=tried_threshold,
+        copy_first_threshold=copy_first_threshold,
+        precedence=precedence,
+    )
 
 
 def compute_python_a1_behavior_groups(
@@ -501,69 +493,37 @@ def compute_python_a1_behavior_groups(
     """
     Return user_id -> category, using the same logic as analyze/a1_behavior_analyze_py.py.
     """
-    labels_by_user = _load_json(labels_path)
-    details_by_user = _load_json(python_details_path)
-    target_problems = _infer_target_problems_from_labels(labels_by_user, stage=stage, problem_prefix=problem_prefix)
-
-    out: dict[str, str] = {}
-    for uid in usernames:
-        chats = _iter_user_a1_chat_labels(
-            labels_by_user,
-            uid,
-            stage=stage,
-            problem_prefix=problem_prefix,
-            drop_unk_ask=drop_unk_ask,
-        )
-
-        # Build problem -> chat sequence
-        by_prob: dict[str, list[_A1ChatLabel]] = {}
-        for c in chats:
-            by_prob.setdefault(c.problem, []).append(c)
-
-        attempted_map = _attempted_map_python(details_by_user, uid)
-
-        if problem_denom_policy == "attempted_or_chatted":
-            for p in target_problems:
-                if p not in by_prob and attempted_map.get(p, False):
-                    by_prob[p] = []
-        elif problem_denom_policy == "all_in_problem_set":
-            for p in target_problems:
-                by_prob.setdefault(p, [])
-        elif problem_denom_policy != "chatted_only":
-            raise ValueError(f"Unknown problem_denom_policy: {problem_denom_policy}")
-
-        if not by_prob:
-            out[uid] = "no_chat"
-            continue
-
-        per_problem = []
-        for p, seq in by_prob.items():
-            attempted_without_chat = bool(attempted_map.get(p, False)) and (len(seq) == 0)
-            per_problem.append(
-                _compute_single_problem_features(
-                    seq,
-                    attempted_without_chat=attempted_without_chat,
-                    nochat_tried_if_attempted=nochat_tried_if_attempted,
-                )
-            )
-
-        n_chats = sum(int(f.get("n_chats") or 0) for f in per_problem)
-        tried_rate_problem = (
-            sum(1 for f in per_problem if f.get("tried_any") is True) / len(per_problem) if per_problem else 0.0
-        )
-        mindless_copy_rate_problem = (
-            sum(1 for f in per_problem if f.get("mindless_copy") is True) / len(per_problem) if per_problem else 0.0
-        )
-        ask_then_explain = any(f.get("ask_then_explain") is True for f in per_problem)
-
-        out[uid] = _pick_a1_category(
-            n_chats=int(n_chats),
-            tried_rate_problem=float(tried_rate_problem),
-            mindless_copy_rate_problem=float(mindless_copy_rate_problem),
-            ask_then_explain=bool(ask_then_explain),
-        )
-
-    return out
+    labels_by_user = behavior_a1.load_json(labels_path)
+    details_by_user = behavior_a1.load_json(python_details_path)
+    scores = {uid: {"group": "Experiment"} for uid in usernames}
+    target_problems = behavior_a1.infer_target_problems_from_labels(
+        labels_by_user,
+        stage=stage,
+        problem_prefix=problem_prefix,
+    )
+    user_problem_chats = behavior_a1.build_user_problem_chats(
+        labels_by_user,
+        scores,
+        details_by_user,
+        group="Experiment",
+        stage=stage,
+        problem_prefix=problem_prefix,
+        drop_unk_ask=drop_unk_ask,
+        target_problems=target_problems,
+        problem_denom_policy=problem_denom_policy,
+        excluded_users=set(),
+    )
+    attempted_without_chat = behavior_a1.build_user_problem_attempted_map(user_problem_chats, details_by_user)
+    feats_by_user = behavior_a1.compute_all_user_features(
+        user_problem_chats,
+        attempted_without_chat,
+        scores,
+        tried_threshold=TRIED_THRESHOLD,
+        copy_first_threshold=COPY_FIRST_THRESHOLD,
+        precedence=behavior_a1.PYTHON_A1_PRECEDENCE,
+        nochat_tried_if_attempted=nochat_tried_if_attempted,
+    )
+    return {uid: feat.category for uid, feat in feats_by_user.items()}
 
 
 def _iter_user_math_chat_labels(
@@ -708,27 +668,17 @@ def _pick_math_category(
     copy_first_threshold: float = MATH_COPY_FIRST_THRESHOLD,
     precedence: tuple[str, ...] = MATH_PRECEDENCE,
 ) -> str:
-    def _match(cat: str) -> bool:
-        if cat == "no_chat":
-            return n_chats == 0
-        if cat == "ask_then_explain":
-            return n_chats > 0 and ask_then_explain
-        if cat == "challenge_wrong":
-            return n_chats > 0 and challenge_wrong
-        if cat == "fix_after_wrong":
-            return n_chats > 0 and fix_after_wrong
-        if cat == "try_then_ask":
-            return n_chats > 0 and tried_rate_problem >= tried_threshold
-        if cat == "mindless_copy":
-            return n_chats > 0 and mindless_copy_rate_problem >= copy_first_threshold
-        if cat == "other":
-            return True
-        raise ValueError(f"Unknown category: {cat}")
-
-    for cat in precedence:
-        if _match(cat):
-            return cat
-    return "other"
+    return pick_math_a1_category(
+        n_chats=n_chats,
+        tried_rate_problem=tried_rate_problem,
+        mindless_copy_rate_problem=mindless_copy_rate_problem,
+        ask_then_explain=ask_then_explain,
+        challenge_wrong=challenge_wrong,
+        fix_after_wrong=fix_after_wrong,
+        tried_threshold=tried_threshold,
+        copy_first_threshold=copy_first_threshold,
+        precedence=precedence,
+    )
 
 
 def compute_math_a1_behavior_groups(
@@ -746,105 +696,46 @@ def compute_math_a1_behavior_groups(
     """
     Return user_id -> category, using the same logic as analyze/a1_behavior_analyze_math.py.
     """
-    labels_by_user = _load_json(labels_path)
-    details_by_user = _load_json(math_details_path)
-    target_problems = _infer_target_problems_from_labels(labels_by_user, stage=stage, problem_prefix=problem_prefix)
-
-    out: dict[str, str] = {}
-    for uid in usernames:
-        chats = _iter_user_math_chat_labels(
+    labels_by_user = behavior_a1.load_json(labels_path)
+    details_by_user = behavior_a1.load_json(math_details_path)
+    scores = {uid: {"group": "Experiment"} for uid in usernames}
+    target_problems = behavior_a1.infer_target_problems_from_labels(
+        labels_by_user,
+        stage=stage,
+        problem_prefix=problem_prefix,
+    )
+    old_threshold = behavior_a1._compute_single_problem_features_math.__globals__["PRETRY_BLANK_PROP_THRESHOLD"]
+    behavior_a1._compute_single_problem_features_math.__globals__[
+        "PRETRY_BLANK_PROP_THRESHOLD"
+    ] = pretry_blank_prop_threshold
+    try:
+        user_problem_chats = behavior_a1.build_user_problem_chats_math(
             labels_by_user,
-            uid,
+            scores,
+            details_by_user,
+            group="Experiment",
             stage=stage,
             problem_prefix=problem_prefix,
             drop_unk_ask=drop_unk_ask,
+            target_problems=target_problems,
+            problem_denom_policy=problem_denom_policy,
+            excluded_users=set(),
         )
-
-        by_prob: dict[str, list[_MathChatLabel]] = {}
-        for c in chats:
-            by_prob.setdefault(c.problem, []).append(c)
-
-        drec = details_by_user.get(uid, {}) if isinstance(details_by_user.get(uid, {}), dict) else {}
-
-        def _attempted(problem_id: str) -> bool:
-            prec = drec.get(problem_id, {})
-            return isinstance(prec, dict) and prec.get("user_answer") is not None
-
-        if problem_denom_policy == "attempted_or_chatted":
-            for p in target_problems:
-                if p not in by_prob and _attempted(p):
-                    by_prob[p] = []
-        elif problem_denom_policy == "all_in_problem_set":
-            for p in target_problems:
-                by_prob.setdefault(p, [])
-        elif problem_denom_policy != "chatted_only":
-            raise ValueError(f"Unknown problem_denom_policy: {problem_denom_policy}")
-
-        if not by_prob:
-            out[uid] = "no_chat"
-            continue
-
-        per_problem = []
-        for p, seq in by_prob.items():
-            attempted_without_chat = bool(_attempted(p)) and (len(seq) == 0)
-            per_problem.append(
-                _compute_single_problem_features_math(
-                    seq,
-                    problem_id=p,
-                    attempted_without_chat=attempted_without_chat,
-                    nochat_tried_if_attempted=nochat_tried_if_attempted,
-                    pretry_blank_prop_threshold=pretry_blank_prop_threshold,
-                )
-            )
-
-        n_chats = sum(int(f.get("n_chats") or 0) for f in per_problem)
-
-        eligible = [f for f in per_problem if f.get("eligible_for_rates", True)]
-        denom = len(eligible)
-        if denom == 0:
-            tried_rate_problem = 0.0
-            mindless_copy_rate_problem = 0.0
-            ask_then_explain = False
-        else:
-            tried_rate_problem = sum(1 for f in eligible if f.get("tried_any") is True) / denom
-            mindless_copy_rate_problem = sum(1 for f in eligible if f.get("mindless_copy") is True) / denom
-            ask_then_explain = any(f.get("ask_then_explain") is True for f in eligible)
-
-        all_chats = [c for seq in by_prob.values() for c in seq]
-        if not all_chats:
-            challenge_wrong = False
-            fix_after_wrong = False
-        else:
-            challenge_wrong = any((c.ask_type == "challenge" and c.llm_wrong) for c in all_chats)
-            fix_after_wrong = False
-            for seq in by_prob.values():
-                llm_correct: set[str] = set()
-                llm_wrong: set[str] = set()
-                post_correct: set[str] = set()
-                pre_correct: set[str] = set()
-                for c in seq:
-                    c_ok, c_bad = _blanks_by_correct(c.ask_blanks)
-                    llm_correct.update(c_ok)
-                    llm_wrong.update(c_bad)
-                    p_ok, _p_bad = _blanks_by_correct(c.post_blanks)
-                    post_correct.update(p_ok)
-                    pre_ok, _pre_bad = _blanks_by_correct(c.pre_blanks)
-                    pre_correct.update(pre_ok)
-                candidate = (llm_wrong - llm_correct) & post_correct & (set(post_correct) - pre_correct)
-                if candidate:
-                    fix_after_wrong = True
-                    break
-
-        out[uid] = _pick_math_category(
-            n_chats=int(n_chats),
-            tried_rate_problem=float(tried_rate_problem),
-            mindless_copy_rate_problem=float(mindless_copy_rate_problem),
-            ask_then_explain=bool(ask_then_explain),
-            challenge_wrong=bool(challenge_wrong),
-            fix_after_wrong=bool(fix_after_wrong),
+        attempted_without_chat = behavior_a1.build_user_problem_attempted_map_math(user_problem_chats, details_by_user)
+        feats_by_user = behavior_a1.compute_all_user_features_math(
+            user_problem_chats,
+            attempted_without_chat,
+            scores,
+            tried_threshold=MATH_TRIED_THRESHOLD,
+            copy_first_threshold=MATH_COPY_FIRST_THRESHOLD,
+            precedence=behavior_a1.MATH_A1_PRECEDENCE,
+            nochat_tried_if_attempted=nochat_tried_if_attempted,
         )
-
-    return out
+    finally:
+        behavior_a1._compute_single_problem_features_math.__globals__[
+            "PRETRY_BLANK_PROP_THRESHOLD"
+        ] = old_threshold
+    return {uid: feat.category for uid, feat in feats_by_user.items()}
 
 
 def _stacked_bar_proportion_plot(
@@ -880,7 +771,7 @@ def _stacked_bar_proportion_plot(
     ax.set_xticklabels(xticklabels, rotation=0)
     ax.set_ylim(0, 1)
     ax.set_title(title, pad=10)
-    ax.set_ylabel("Share of Participants")
+    ax.set_ylabel("Share of participants")
     if xlabel:
         ax.set_xlabel(xlabel)
     ax.spines["top"].set_visible(False)
@@ -919,9 +810,9 @@ def plot_python_a1_behavior_group_proportions(
 
     behavior_order = ["no_chat", "mindless_copy", "try_then_ask", "ask_then_explain"]
     display_name = {
-        "no_chat": "Unaided",
-        "mindless_copy": "Rote-Adoption",
-        "try_then_ask": "Active-Trial",
+        "no_chat": "Abstention",
+        "mindless_copy": "Rote-adoption",
+        "try_then_ask": "Active-trial",
         "ask_then_explain": "Verification",
     }
     direction_by_group = {
@@ -955,15 +846,15 @@ def plot_python_a1_behavior_group_proportions(
         display_name["ask_then_explain"]: "greater",
     }
     colors = {
-        "Unaided": "#c6dbef",
-        "Rote-Adoption": "#9ecae1",
-        "Active-Trial": "#a1d99b",
+        "Abstention": "#c6dbef",
+        "Rote-adoption": "#9ecae1",
+        "Active-trial": "#a1d99b",
         "Verification": "#31a354",
     }
 
     dims = [
-        ("university_cat", ["Low", "Mid", "High"], "University Ranking"),
-        ("capability_cat", ["Low", "Mid", "High"], "Prior Knowledge"),
+        ("university_cat", ["Low", "Mid", "High"], "University ranking"),
+        ("capability_cat", ["Low", "Mid", "High"], "Prior knowledge"),
     ]
 
     prop_tables: list[pd.DataFrame] = []
@@ -1054,24 +945,24 @@ def plot_math_a1_behavior_group_proportions(
         "ask_then_explain",
     ]
     display_name = {
-        "no_chat": "Unaided",
-        "mindless_copy": "Rote-Adoption",
-        "fix_after_wrong": "Error-Correction",
-        "try_then_ask": "Active-Trial",
+        "no_chat": "Abstention",
+        "mindless_copy": "Rote-adoption",
+        "fix_after_wrong": "Error-correction",
+        "try_then_ask": "Active-trial",
         "challenge_wrong": "Verification",
         "ask_then_explain": "Verification",
     }
     colors = {
-        "Unaided": "#c6dbef",
-        "Rote-Adoption": "#9ecae1",
-        "Active-Trial": "#a1d99b",
+        "Abstention": "#c6dbef",
+        "Rote-adoption": "#9ecae1",
+        "Active-trial": "#a1d99b",
         "Verification": "#238b45",
-        "Error-Correction": "#74c476",
+        "Error-correction": "#74c476",
     }
 
     dims = [
-        ("university_cat", ["Low", "Mid", "High"], "University Ranking"),
-        ("capability_cat", ["Low", "Mid", "High"], "Prior Knowledge"),
+        ("university_cat", ["Low", "Mid", "High"], "University ranking"),
+        ("capability_cat", ["Low", "Mid", "High"], "Prior knowledge"),
     ]
 
     prop_tables: list[pd.DataFrame] = []
@@ -1139,6 +1030,18 @@ def calculate_means_by_category(
     outcome_col,
     group_col="group",
 ):
+    def _bootstrap_mean_ci(values: pd.Series, *, seed: int, n_boot: int = 5000) -> tuple[float, float, float]:
+        data = values.dropna().to_numpy(dtype=float)
+        if data.size == 0:
+            return float("nan"), float("nan"), float("nan")
+        mean = float(np.mean(data))
+        if data.size == 1:
+            return mean, mean, mean
+        rng = np.random.default_rng(seed)
+        samples = rng.choice(data, size=(n_boot, data.size), replace=True).mean(axis=1)
+        low, high = np.percentile(samples, [2.5, 97.5])
+        return mean, float(low), float(high)
+
     results = []
 
     unique_categories = df[category_col].dropna().unique()
@@ -1147,7 +1050,9 @@ def calculate_means_by_category(
     except Exception:
         unique_categories = sorted(unique_categories, key=str)
 
-    for category in unique_categories:
+    category_seed_order = {"Low": 0, "Mid": 1, "High": 2}
+    for cat_idx, category in enumerate(unique_categories):
+        seed_idx = category_seed_order.get(str(category), cat_idx)
         cat_df = df[df[category_col] == category]
 
         row_data = {category_col: category}
@@ -1158,16 +1063,25 @@ def calculate_means_by_category(
             if len(group_df) > 0:
                 valid_data = group_df[[outcome_col]].dropna()
                 if len(valid_data) > 0:
-                    mean_val = float(valid_data[outcome_col].mean())
+                    mean_val, ci_low, ci_high = _bootstrap_mean_ci(
+                        valid_data[outcome_col],
+                        seed=20260616 + seed_idx * 10 + int(group_val),
+                    )
                     count = len(valid_data)
                 else:
                     mean_val = np.nan
+                    ci_low = np.nan
+                    ci_high = np.nan
                     count = 0
             else:
                 mean_val = np.nan
+                ci_low = np.nan
+                ci_high = np.nan
                 count = 0
 
             row_data[f"{group_name}_Mean"] = mean_val
+            row_data[f"{group_name}_CI_Low"] = ci_low
+            row_data[f"{group_name}_CI_High"] = ci_high
             row_data[f"{group_name}_N"] = count
 
         results.append(row_data)
@@ -1234,7 +1148,7 @@ def plot_dimension_subplot(
     *,
     raw_df: pd.DataFrame,
     outcome_col: str = "hw2_score",
-    y_label: str = "Exam Score",
+    y_label: str = "Exam score",
     annotation: str = "interaction",
     title: str = "",
     xlabel: Optional[str] = None,
@@ -1257,28 +1171,47 @@ def plot_dimension_subplot(
         ax.set_title(title, fontsize=plot_style["fontsize_title"])
         return
 
-    x_values = range(len(stats_filtered))
-    ax.plot(
-        x_values,
-        stats_filtered["Control_Mean"],
+    x_values = np.arange(len(stats_filtered), dtype=float)
+    offsets = {0: -0.08, 1: 0.08}
+
+    def _yerr(group_name: str) -> Optional[np.ndarray]:
+        low_col = f"{group_name}_CI_Low"
+        high_col = f"{group_name}_CI_High"
+        mean_col = f"{group_name}_Mean"
+        if low_col not in stats_filtered.columns or high_col not in stats_filtered.columns:
+            return None
+        means = stats_filtered[mean_col].to_numpy(dtype=float)
+        lows = stats_filtered[low_col].to_numpy(dtype=float)
+        highs = stats_filtered[high_col].to_numpy(dtype=float)
+        return np.vstack([means - lows, highs - means])
+
+    ax.errorbar(
+        x_values + offsets[0],
+        stats_filtered["Control_Mean"].to_numpy(dtype=float),
+        yerr=_yerr("Control"),
         marker="o",
         linestyle="-",
         color=CONTROL_COLOR,
         markersize=plot_style["marker_size"],
         alpha=plot_style["alpha"],
         linewidth=plot_style["linewidth"],
+        elinewidth=plot_style.get("errorbar_linewidth", 1.0),
+        capsize=plot_style.get("errorbar_capsize", 3.0),
         label="Control",
         zorder=3,
     )
-    ax.plot(
-        x_values,
-        stats_filtered["Treatment_Mean"],
+    ax.errorbar(
+        x_values + offsets[1],
+        stats_filtered["Treatment_Mean"].to_numpy(dtype=float),
+        yerr=_yerr("Treatment"),
         marker="s",
         linestyle="--",
         color=EXPERIMENT_COLOR,
         markersize=plot_style["marker_size"],
         alpha=plot_style["alpha"],
         linewidth=plot_style["linewidth"],
+        elinewidth=plot_style.get("errorbar_linewidth", 1.0),
+        capsize=plot_style.get("errorbar_capsize", 3.0),
         label="Treatment",
         zorder=3,
     )
@@ -1311,6 +1244,9 @@ def plot_dimension_subplot(
     diffs = (stats_filtered["Treatment_Mean"] - stats_filtered["Control_Mean"]).values.astype(float)
     if len(diffs) > 0:
         ax2 = ax.twinx()
+        ax2.set_zorder(0)
+        ax.set_zorder(1)
+        ax.patch.set_visible(False)
         pos_color = plot_style["diff_pos_color"]
         neg_color = plot_style["diff_neg_color"]
         bar_colors = [pos_color if d >= 0 else neg_color for d in diffs]
@@ -1320,7 +1256,7 @@ def plot_dimension_subplot(
             width=0.36,
             color=bar_colors,
             alpha=plot_style["diff_alpha"],
-            zorder=1,
+            zorder=0,
         )
         if diff_max_abs is None:
             max_abs = float(np.max(np.abs(diffs))) if len(diffs) else 0.0
@@ -1331,27 +1267,18 @@ def plot_dimension_subplot(
         ax2.set_yticks([])
         ax2.spines["top"].set_visible(False)
         ax2.spines["right"].set_visible(False)
-        for idx, (x_pos, d, c) in enumerate(zip(x_values, diffs, bar_colors)):
-            offset = 0.1 * max_abs
-            if d >= 0:
-                y = -offset
-            else:
-                y = d - offset
-            try:
-                y0, y1 = ax2.get_ylim()
-                if y < y0 + 0.02 * (y1 - y0):
-                    y = y0 + 0.02 * (y1 - y0)
-            except Exception:
-                pass
-            ax2.text(
+        ax2.spines["left"].set_visible(False)
+        for x_pos, d, c in zip(x_values, diffs, bar_colors):
+            ax.text(
                 x_pos,
-                y,
+                0.055,
                 f"{d:+.2f}",
+                transform=ax.get_xaxis_transform(),
                 ha="center",
-                va="top",
+                va="bottom",
                 fontsize=plot_style["fontsize_diff"],
                 color=c,
-                clip_on=False,
+                bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.72, "pad": 0.6},
                 zorder=5,
             )
 
@@ -1462,13 +1389,13 @@ def plot_equity_assignment_scores(
             "col": "university_cat",
             "order": ["Low", "Mid", "High"],
             "title": "",
-            "xlabel": "University Ranking",
+            "xlabel": "University ranking",
         },
         {
             "col": "capability_cat",
             "order": ["Low", "Mid", "High"],
             "title": "",
-            "xlabel": "Prior Knowledge",
+            "xlabel": "Prior knowledge",
         },
     ]
 
@@ -1495,17 +1422,48 @@ def plot_equity_assignment_scores(
                 all_means.extend([v for v in stats_df["Control_Mean"].tolist() if pd.notna(v)])
             if "Treatment_Mean" in stats_df.columns:
                 all_means.extend([v for v in stats_df["Treatment_Mean"].tolist() if pd.notna(v)])
+            for ci_col in [
+                "Control_CI_Low",
+                "Control_CI_High",
+                "Treatment_CI_Low",
+                "Treatment_CI_High",
+            ]:
+                if ci_col in stats_df.columns:
+                    all_means.extend([v for v in stats_df[ci_col].tolist() if pd.notna(v)])
             if "Gap" in stats_df.columns:
                 all_diffs.extend([v for v in stats_df["Gap"].tolist() if pd.notna(v)])
 
     if all_means:
         y_max = float(max(all_means))
         y_max = max(0.0, y_max)
-        y_limits = (0.0, y_max * 1.08 if y_max > 0 else 1.0)
+        y_min = float(min(all_means))
+        y_lower = min(-0.35, y_min - 0.03 * max(y_max - y_min, 1.0))
+        y_limits = (y_lower, y_max * 1.08 if y_max > 0 else 1.0)
     else:
-        y_limits = (0.0, 1.0)
+        y_limits = (-0.35, 1.0)
 
     diff_max_abs = float(max([abs(v) for v in all_diffs], default=0.0))
+
+    def _course_y_limits(course_name: str) -> tuple[float, float]:
+        vals = []
+        for dim in dimensions:
+            stats_df = course_stats[course_name][dim["col"]]
+            for value_col in [
+                "Control_Mean",
+                "Treatment_Mean",
+                "Control_CI_Low",
+                "Control_CI_High",
+                "Treatment_CI_Low",
+                "Treatment_CI_High",
+            ]:
+                if value_col in stats_df.columns:
+                    vals.extend([v for v in stats_df[value_col].tolist() if pd.notna(v)])
+        if not vals:
+            return (-0.35, 1.0)
+        local_max = max(0.0, float(max(vals)))
+        local_min = float(min(vals))
+        local_lower = min(-0.35, local_min - 0.03 * max(local_max - local_min, 1.0))
+        return (local_lower, local_max * 1.08 if local_max > 0 else 1.0)
 
     print("\nMean Statistics:")
     for course_name in ["Python", "Math"]:
@@ -1525,9 +1483,11 @@ def plot_equity_assignment_scores(
         "linewidth": 1.5,
         "marker_size": 6,
         "alpha": 0.8,
+        "errorbar_linewidth": 1.0,
+        "errorbar_capsize": 3.0,
         "diff_pos_color": "#74C476",
         "diff_neg_color": "#FB6A4A",
-        "diff_alpha": 0.28,
+        "diff_alpha": 0.18,
     }
 
     def _build_legend(fig):
@@ -1609,13 +1569,16 @@ def plot_equity_assignment_scores(
             bbox_to_anchor=(0.5, 0.98),
             ncol=3,
             frameon=False,
-            fontsize=plot_style["fontsize_tick"],
+            fontsize=13,
+            columnspacing=1.1,
+            handlelength=1.8,
             handler_map=handler_map if handler_map is not None else None,
         )
 
     def _plot_course(course_name: str, output_path: Path):
         fig = plt.figure(figsize=(7.5, 3.6), dpi=300)
         gs = GridSpec(1, len(dimensions), figure=fig, hspace=0.28, wspace=0.22)
+        course_y_limits = _course_y_limits(course_name)
         for dim_idx, dimension in enumerate(dimensions):
             ax = fig.add_subplot(gs[0, dim_idx])
             plot_dimension_subplot(
@@ -1629,8 +1592,8 @@ def plot_equity_assignment_scores(
                 annotation=annotation,
                 title="",
                 xlabel=dimension["xlabel"],
-                y_limits=y_limits,
-                diff_max_abs=diff_max_abs,
+                y_limits=course_y_limits,
+                diff_max_abs=None,
                 plot_style=plot_style,
             )
         _build_legend(fig)
@@ -1654,7 +1617,7 @@ def plot_equity(python_df, math_df, output_file, *, show: bool = True):
         math_df,
         output_file,
         outcome_col="hw2_score",
-        y_label="Exam Score",
+        y_label="Exam score",
         annotation="interaction",
         show=show,
     )
@@ -1666,7 +1629,7 @@ def plot_equity_hw1(python_df, math_df, output_file, *, show: bool = True):
         math_df,
         output_file,
         outcome_col="hw1_score",
-        y_label="Assignment Score",
+        y_label="Assignment score",
         annotation="slope_delta",
         capability_categorizer=categorize_capability_from_score_appendix_hw1,
         show=show,
@@ -1684,7 +1647,7 @@ def _compute_behavior_supergroup(
             return "proactive_critic"
         if cat in passive_categories:
             return "passive"
-        return "other"
+        return "passive"
 
     return series.map(_map)
 
@@ -1735,8 +1698,8 @@ def _plot_behavior_vs_exp_lines(
         )
 
     dims = [
-        ("university_cat", ["Low", "Mid", "High"], "University Ranking"),
-        ("capability_cat", ["Low", "Mid", "High"], "Prior Knowledge"),
+        ("university_cat", ["Low", "Mid", "High"], "University ranking"),
+        ("capability_cat", ["Low", "Mid", "High"], "Prior knowledge"),
     ]
 
     exp_mask = pd.Series(True, index=df_exp.index)
@@ -1804,7 +1767,7 @@ def _plot_behavior_vs_exp_lines(
         xticklabels = ["Medium" if str(v) == "Mid" else str(v) for v in order]
         ax.set_xticklabels(xticklabels, rotation=0, ha="center")
         ax.set_xlabel(xlabel)
-        ax.set_ylabel("Exam Score")
+        ax.set_ylabel("Exam score")
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
         ax.tick_params(axis="both", which="both", length=4, width=1)
@@ -1856,112 +1819,97 @@ def _plot_behavior_vs_exp_lines_combined(
         )
 
     dims = [
-        ("university_cat", ["Low", "Mid", "High"], "University Ranking"),
-        ("capability_cat", ["Low", "Mid", "High"], "Prior Knowledge"),
+        ("university_cat", ["Low", "Mid", "High"], "University ranking"),
+        ("capability_cat", ["Low", "Mid", "High"], "Prior knowledge"),
     ]
 
-    exp_mask = pd.Series(True, index=df_exp.index)
-    proactive_critic_mask = df_exp[behavior_col] == "proactive_critic"
-    passive_mask = df_exp[behavior_col] == "passive"
+    behavior_order = ["passive", "proactive_critic"]
+    behavior_labels = {
+        "passive": "Limited\nengagement",
+        "proactive_critic": "Proactive\n& critic",
+    }
+    palette = {"Low": CONTROL_COLOR, "Mid": "#7F7F7F", "High": EXPERIMENT_COLOR}
+    linestyles = {"Low": "-", "Mid": "--", "High": "-."}
+    markers = {"Low": "o", "Mid": "s", "High": "^"}
+    y_axis_top = 11.0 if course_name.lower() == "math" else None
 
-    stats_tables = []
-    for col, order, _title in dims:
-        stats_tables.append(
-            _calculate_means_by_category_two_groups(
-                df=df_exp,
-                category_col=col,
-                category_order=order,
-                outcome_col="hw2_score",
-                group_a_mask=exp_mask,
-                group_b_mask=proactive_critic_mask,
-                group_a_label="Experiment",
-                group_b_label="Proactive & Critic",
-            )
+    def _plot_df_for(profile_col: str, profile_order: list[str]) -> pd.DataFrame:
+        plot_df = df_exp.loc[
+            df_exp[behavior_col].isin(behavior_order)
+            & df_exp[profile_col].isin(profile_order),
+            ["username", "hw2_score", behavior_col, profile_col],
+        ].dropna().copy()
+        plot_df[behavior_col] = pd.Categorical(
+            plot_df[behavior_col], categories=behavior_order, ordered=True
         )
-
-    passive_tables = []
-    for col, order, _title in dims:
-        passive_tables.append(
-            _calculate_means_by_category_two_groups(
-                df=df_exp,
-                category_col=col,
-                category_order=order,
-                outcome_col="hw2_score",
-                group_a_mask=exp_mask,
-                group_b_mask=passive_mask,
-                group_a_label="Experiment",
-                group_b_label="Passive",
-            )
+        plot_df[profile_col] = pd.Categorical(
+            plot_df[profile_col].astype(str), categories=profile_order, ordered=True
         )
-
-    all_means: list[float] = []
-    for stats_df, pro_df in zip(stats_tables, passive_tables):
-        for col in ["Experiment_Mean", "Proactive & Critic_Mean"]:
-            if col in stats_df.columns:
-                all_means.extend([v for v in stats_df[col].tolist() if pd.notna(v)])
-        if "Passive_Mean" in pro_df.columns:
-            all_means.extend([v for v in pro_df["Passive_Mean"].tolist() if pd.notna(v)])
-    if all_means:
-        y_max = max(all_means)
-        y_limits = (0.0, y_max * 1.08 if y_max > 0 else 1.0)
-    else:
-        y_limits = (0.0, 1.0)
+        return plot_df.sort_values([behavior_col, profile_col, "username"])
 
     _set_nature_style_v2()
-    fig = plt.figure(figsize=(7.5, 3.6), dpi=300)
-    gs = GridSpec(1, len(dims), figure=fig, hspace=0.28, wspace=0.22)
-
-    for idx, (dimension, stats_df, pro_df) in enumerate(zip(dims, stats_tables, passive_tables)):
-        _col, order, xlabel = dimension
-        ax = fig.add_subplot(gs[0, idx])
-        x_values = range(len(order))
-        ax.plot(
-            x_values,
-            stats_df["Experiment_Mean"],
-            marker="s",
-            linestyle="--",
-            color=EXPERIMENT_COLOR,
-            markersize=6,
-            linewidth=1.6,
-            alpha=0.85,
-            label="Experimental",
-            zorder=3,
+    fig, axes = plt.subplots(
+        1,
+        len(dims),
+        figsize=(7.5, 3.6),
+        dpi=300,
+        sharey=True,
+        gridspec_kw={"wspace": 0.22},
+    )
+    for ax, (_col, order, xlabel) in zip(axes, dims):
+        plot_df = _plot_df_for(_col, order)
+        if plot_df.empty:
+            ax.text(0.5, 0.5, "No data", ha="center", va="center", transform=ax.transAxes)
+            ax.set_axis_off()
+            continue
+        sns.pointplot(
+            data=plot_df,
+            x=behavior_col,
+            y="hw2_score",
+            hue=_col,
+            order=behavior_order,
+            hue_order=order,
+            palette=palette,
+            estimator="median",
+            errorbar=("ci", 95),
+            dodge=0.16,
+            markers=[markers[p] for p in order],
+            linestyles=[linestyles[p] for p in order],
+            linewidth=1.7,
+            err_kws={"linewidth": 1.0, "alpha": 0.9},
+            capsize=0.07,
+            n_boot=5000,
+            seed=20260616,
+            ax=ax,
         )
-        ax.plot(
-            x_values,
-            stats_df["Proactive & Critic_Mean"],
-            marker="o",
-            linestyle="-",
-            color=proactive_critic_color,
-            markersize=6,
-            linewidth=1.6,
-            alpha=0.85,
-            label="Proactive & Critic",
-            zorder=3,
-        )
-        ax.plot(
-            x_values,
-            pro_df["Passive_Mean"],
-            marker="^",
-            linestyle=":",
-            color=passive_color,
-            markersize=6,
-            linewidth=1.6,
-            alpha=0.85,
-            label="Passive",
-            zorder=3,
-        )
-        ax.set_xticks(list(x_values))
-        xticklabels = ["Medium" if str(v) == "Mid" else str(v) for v in order]
-        ax.set_xticklabels(xticklabels, rotation=0, ha="center")
-        ax.set_xlabel(xlabel)
-        ax.set_ylabel("Exam Score")
+        for line in ax.lines:
+            color = line.get_color()
+            line.set_markerfacecolor(color)
+            line.set_markeredgecolor(color)
+            line.set_markeredgewidth(1.0)
+            line.set_markersize(6.0)
+            line.set_alpha(0.9)
+        ax.set_xticks(range(len(behavior_order)))
+        ax.set_xticklabels([behavior_labels[b] for b in behavior_order], rotation=0, ha="center", fontsize=14)
+        ax.set_xlabel(xlabel, fontsize=15)
+        ax.set_ylabel("Exam score", fontsize=15)
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
-        ax.tick_params(axis="both", which="both", length=4, width=1)
+        ax.tick_params(
+            axis="both",
+            which="both",
+            direction="out",
+            length=5.0,
+            width=1.2,
+            bottom=True,
+            left=True,
+            labelleft=True,
+            labelsize=14,
+        )
         ax.grid(False)
-        ax.set_ylim(y_limits[0], y_limits[1])
-
+        ax.set_xlim(-0.28, len(behavior_order) - 0.72)
+        if y_axis_top is not None:
+            ax.set_ylim(0.0, y_axis_top)
         metric_key = "university" if _col == "university_cat" else "prior"
         metrics = (explained_metrics or {}).get(metric_key, {})
         delta_coef = metrics.get("delta_coef")
@@ -1977,29 +1925,36 @@ def _plot_behavior_vs_exp_lines_combined(
                 fontsize=10,
                 color="black",
             )
+        if ax.get_legend() is not None:
+            ax.get_legend().remove()
 
     fig.legend(
         handles=[
-            plt.Line2D([0], [0], marker="s", linestyle="--", color=EXPERIMENT_COLOR, markersize=6, linewidth=1.6),
             plt.Line2D(
                 [0],
                 [0],
-                marker="o",
-                linestyle="-",
-                color=proactive_critic_color,
+                marker=markers[profile],
+                linestyle=linestyles[profile],
+                color=palette[profile],
+                markerfacecolor=palette[profile],
+                markeredgecolor=palette[profile],
+                markeredgewidth=1.0,
                 markersize=6,
-                linewidth=1.6,
-            ),
-            plt.Line2D([0], [0], marker="^", linestyle=":", color=passive_color, markersize=6, linewidth=1.6),
+                linewidth=1.7,
+                alpha=0.9,
+            )
+            for profile in ["Low", "Mid", "High"]
         ],
-        labels=["Experimental", "Proactive & Critic", "Passive"],
+        labels=["Low profile", "Medium profile", "High profile"],
         loc="upper center",
-        bbox_to_anchor=(0.5, 0.98),
+        bbox_to_anchor=(0.5, 0.96),
         ncol=3,
         frameon=False,
         fontsize=12,
+        columnspacing=1.2,
+        handlelength=1.8,
     )
-    fig.tight_layout(rect=[0.04, 0, 1, 0.92])
+    fig.tight_layout(rect=[0.04, 0, 1, 0.94])
     output_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(output_path, bbox_inches="tight", dpi=300)
     print(f"[Behavior equity] Saved combined plot to: {relative_path(output_path)}")

@@ -126,18 +126,18 @@ def get_background_feature_cols(course_type: str) -> list[str]:
 
 def get_feature_display_names() -> dict[str, str]:
     return {
-        "university_ranking_num": "University Ranking",
+        "university_ranking_num": "University ranking",
         "major_num": "Major",
-        "grade_num": "Year in Program",
-        "class_ranking_num": "Class Rank",
-        "first_gen_num": "First-Generation Status",
-        "economic_status_num": "Socioeconomic Status",
-        "gpt_usage_num": "LLM Usage",
-        "gpt_frequency_num": "LLM Usage Frequency",
-        "gpt_familiarity_num": "LLM Familiarity",
-        "captest_score": "Prior Knowledge",
-        "university_cat": "University Ranking",
-        "capability_cat": "Prior Knowledge",
+        "grade_num": "Year in program",
+        "class_ranking_num": "Class rank",
+        "first_gen_num": "First-generation status",
+        "economic_status_num": "Socioeconomic status",
+        "gpt_usage_num": "LLM usage",
+        "gpt_frequency_num": "LLM usage frequency",
+        "gpt_familiarity_num": "LLM familiarity",
+        "captest_score": "Prior knowledge",
+        "university_cat": "University ranking",
+        "capability_cat": "Prior knowledge",
         "course": "Course",
     }
 

@@ -313,7 +313,7 @@ def _app_run_plagiarism_figures(
         ax1.bar(lefts, hist_vals, width=widths, align="edge", color="#9ecae1", edgecolor="white", linewidth=0.8)
     ax1.set_xlim(0, 1)
     ax1.set_ylim(bottom=0)
-    _app_apply_axes(ax1, xlabel="Problem Rote-Adoption Rate", ylabel="Participant Proportion")
+    _app_apply_axes(ax1, xlabel="Problem rote-adoption rate", ylabel="Participant proportion")
     fig1.tight_layout()
     out_fig1 = FIGURES_DIR / f"{output_prefix}_user_plagiarism_ratio.pdf"
     fig1.savefig(out_fig1, dpi=300, bbox_inches="tight")
@@ -331,7 +331,7 @@ def _app_run_plagiarism_figures(
     ax2.set_ylim(0, 1.0)
     ax2.set_xticks(xs)
     ax2.set_xticklabels(xlabels, rotation=0, ha="center")
-    _app_apply_axes(ax2, xlabel="Problem", ylabel="Direct Adoption Rate")
+    _app_apply_axes(ax2, xlabel="Problem", ylabel="Direct adoption rate")
     fig2.tight_layout()
     out_fig2 = FIGURES_DIR / f"{output_prefix}_problem_plagiarism_ratio.pdf"
     fig2.savefig(out_fig2, dpi=300, bbox_inches="tight")
@@ -347,7 +347,7 @@ def _app_run_plagiarism_figures(
     ax3.axvline(20, color="#666666", linewidth=1.0, linestyle="--")
     ax3.set_xlim(0, 20)
     ax3.set_ylim(0, 1.0)
-    _app_apply_axes(ax3, xlabel="Time To First Direct Adoption (Min)", ylabel="Cumulative Proportion")
+    _app_apply_axes(ax3, xlabel="Time to first direct adoption (min)", ylabel="Cumulative proportion")
     if n_total > 0 and len(xs_ev) > 0:
         ys_ev = np.arange(1, len(xs_ev) + 1, dtype=float) / float(n_total)
         xs_plot = np.concatenate(([0.0], xs_ev, [20.0]))
@@ -581,7 +581,7 @@ def _app_run_math_llm_accuracy_and_correction(labels_by_user: dict[str, Any], us
     ax_c.set_xticks(x)
     ax_c.set_xticklabels(diff_bins)
     ax_c.set_ylim(0.0, 0.7)
-    _app_apply_axes(ax_c, xlabel="Difficulty", ylabel="Correction Ratio")
+    _app_apply_axes(ax_c, xlabel="Difficulty", ylabel="Correction ratio")
     ax_c.legend(frameon=False, loc="upper right", bbox_to_anchor=(1.0, 1.05), fontsize=9)
     fig_c.tight_layout()
     out_corr = FIGURES_DIR / "a1_math_llm_wrong_outcome_by_difficulty.pdf"
@@ -607,7 +607,7 @@ def _app_run_math_llm_accuracy_and_correction(labels_by_user: dict[str, Any], us
     ax_n.set_xticks(x)
     ax_n.set_xticklabels(diff_bins)
     ax_n.set_ylim(0.0, 0.7)
-    _app_apply_axes(ax_n, xlabel="Difficulty", ylabel="Non-adoption Ratio")
+    _app_apply_axes(ax_n, xlabel="Difficulty", ylabel="Non-adoption ratio")
     ax_n.legend(frameon=False, loc="upper right", bbox_to_anchor=(1.0, 1.05), fontsize=9)
     fig_n.tight_layout()
     out_non = FIGURES_DIR / "a1_math_llm_correct_not_adopted_by_difficulty.pdf"
