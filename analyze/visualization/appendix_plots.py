@@ -11,6 +11,7 @@ import seaborn as sns
 
 from analyze.utils.display import relative_path
 from analyze.stats.feature_screening import get_feature_display_names
+from analyze.survey.participant_feedback import plot_multi_select_pie
 
 def set_nature_style() -> None:
     plt.rcParams.update(
