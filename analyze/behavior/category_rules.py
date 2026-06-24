@@ -20,6 +20,57 @@ PYTHON_A1_PRECEDENCE: tuple[str, ...] = (
     "mindless_copy",
 )
 
+PYTHON_A1_DISPLAY_ORDER: tuple[str, ...] = (
+    "no_chat",
+    "mindless_copy",
+    "try_then_ask",
+    "ask_then_explain",
+)
+
+MATH_A1_DISPLAY_ORDER: tuple[str, ...] = (
+    "no_chat",
+    "mindless_copy",
+    "try_then_ask",
+    "fix_after_wrong",
+    "challenge_wrong",
+    "ask_then_explain",
+)
+
+PYTHON_A1_DISPLAY_NAMES: dict[str, str] = {
+    "no_chat": "Abstention",
+    "mindless_copy": "Rote-adoption",
+    "try_then_ask": "Active-trial",
+    "ask_then_explain": "Verification",
+}
+
+MATH_A1_DISPLAY_NAMES: dict[str, str] = {
+    "no_chat": "Abstention",
+    "mindless_copy": "Rote-adoption",
+    "try_then_ask": "Active-trial",
+    "fix_after_wrong": "Error-correction",
+    "challenge_wrong": "Verification",
+    "ask_then_explain": "Verification",
+}
+
+PYTHON_PROACTIVE_CRITICAL_CATEGORIES: frozenset[str] = frozenset(
+    {"try_then_ask", "ask_then_explain"}
+)
+MATH_PROACTIVE_CRITICAL_CATEGORIES: frozenset[str] = frozenset(
+    {"try_then_ask", "ask_then_explain", "fix_after_wrong", "challenge_wrong"}
+)
+
+
+def behavior_supergroup(category: object, *, course_type: str) -> str:
+    """Map a fine-grained A1 category to the shared two-group definition."""
+    proactive_categories = (
+        PYTHON_PROACTIVE_CRITICAL_CATEGORIES
+        if course_type.lower() == "python"
+        else MATH_PROACTIVE_CRITICAL_CATEGORIES
+    )
+    if category in proactive_categories:
+        return "proactive_critical"
+    return "passive"
+
 
 def pick_python_a1_category(
     *,

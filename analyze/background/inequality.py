@@ -34,8 +34,13 @@ from statsmodels.stats.proportion import proportions_ztest
 from analyze.utils.display import relative_path
 import analyze.behavior.a1 as behavior_a1
 from analyze.behavior.category_rules import (
+    MATH_A1_DISPLAY_NAMES,
+    MATH_A1_DISPLAY_ORDER,
     MATH_A1_PRECEDENCE,
+    PYTHON_A1_DISPLAY_NAMES,
+    PYTHON_A1_DISPLAY_ORDER,
     PYTHON_A1_PRECEDENCE,
+    behavior_supergroup,
     pick_math_a1_category,
     pick_python_a1_category,
 )
@@ -808,37 +813,8 @@ def plot_python_a1_behavior_group_proportions(
     )
     df_exp["a1_behavior_group"] = df_exp["username"].map(user_to_cat).fillna("no_chat")
 
-    behavior_order = ["no_chat", "mindless_copy", "try_then_ask", "ask_then_explain"]
-    display_name = {
-        "no_chat": "Abstention",
-        "mindless_copy": "Rote-adoption",
-        "try_then_ask": "Active-trial",
-        "ask_then_explain": "Verification",
-    }
-    direction_by_group = {
-        display_name["no_chat"]: "less",
-        display_name["mindless_copy"]: "less",
-        display_name["try_then_ask"]: "greater",
-        display_name["ask_then_explain"]: "greater",
-    }
-    direction_by_group = {
-        display_name["no_chat"]: "less",
-        display_name["mindless_copy"]: "less",
-        display_name["try_then_ask"]: "greater",
-        display_name["ask_then_explain"]: "greater",
-    }
-    direction_by_group = {
-        display_name["no_chat"]: "less",
-        display_name["mindless_copy"]: "less",
-        display_name["try_then_ask"]: "greater",
-        display_name["ask_then_explain"]: "greater",
-    }
-    direction_by_group = {
-        display_name["no_chat"]: "less",
-        display_name["mindless_copy"]: "less",
-        display_name["try_then_ask"]: "greater",
-        display_name["ask_then_explain"]: "greater",
-    }
+    behavior_order = list(PYTHON_A1_DISPLAY_ORDER)
+    display_name = PYTHON_A1_DISPLAY_NAMES
     direction_by_group = {
         display_name["no_chat"]: "less",
         display_name["mindless_copy"]: "less",
@@ -936,22 +912,8 @@ def plot_math_a1_behavior_group_proportions(
     )
     df_exp["a1_behavior_group"] = df_exp["username"].map(user_to_cat).fillna("no_chat")
 
-    behavior_order = [
-        "no_chat",
-        "mindless_copy",
-        "try_then_ask",
-        "fix_after_wrong",
-        "challenge_wrong",
-        "ask_then_explain",
-    ]
-    display_name = {
-        "no_chat": "Abstention",
-        "mindless_copy": "Rote-adoption",
-        "fix_after_wrong": "Error-correction",
-        "try_then_ask": "Active-trial",
-        "challenge_wrong": "Verification",
-        "ask_then_explain": "Verification",
-    }
+    behavior_order = list(MATH_A1_DISPLAY_ORDER)
+    display_name = MATH_A1_DISPLAY_NAMES
     colors = {
         "Abstention": "#c6dbef",
         "Rote-adoption": "#9ecae1",
@@ -1121,25 +1083,6 @@ def categorize_capability_from_score(score, course_type):
     return "High"
 
 
-def categorize_capability_from_score_appendix_hw1(score, course_type):
-    """Capability bins used by the original HW1 assignment-score appendix figure."""
-    if pd.isna(score):
-        return None
-
-    if course_type == "python":
-        if score < 3:
-            return "Low"
-        if score < 7:
-            return "Mid"
-        return "High"
-
-    if score <= 3:
-        return "Low"
-    if score < 7:
-        return "Mid"
-    return "High"
-
-
 def plot_dimension_subplot(
     ax,
     stats_df,
@@ -1282,39 +1225,6 @@ def plot_dimension_subplot(
                 zorder=5,
             )
 
-    if annotation == "slope_delta":
-        # For assignment-score appendix plots, the original diagnostic reports
-        # how much the treatment-control trend slope changes across the ordered bins.
-        def _slope(vals: list[float]) -> float | None:
-            xs = np.arange(1, len(vals) + 1, dtype=float)
-            ys = np.array(vals, dtype=float)
-            mask = ~np.isnan(ys)
-            xs = xs[mask]
-            ys = ys[mask]
-            if len(ys) < 2:
-                return None
-            x_mean = float(xs.mean())
-            y_mean = float(ys.mean())
-            denom = float(np.sum((xs - x_mean) ** 2))
-            if denom == 0:
-                return None
-            return float(np.sum((xs - x_mean) * (ys - y_mean)) / denom)
-
-        control_slope = _slope(stats_filtered["Control_Mean"].tolist())
-        treatment_slope = _slope(stats_filtered["Treatment_Mean"].tolist())
-        if control_slope is not None and treatment_slope is not None:
-            ax.text(
-                0.5,
-                0.96,
-                rf"$\Delta s={treatment_slope - control_slope:+.2f}$",
-                transform=ax.transAxes,
-                ha="center",
-                va="top",
-                fontsize=10,
-                color="black",
-            )
-        return
-
     if annotation != "interaction":
         return
 
@@ -1366,6 +1276,7 @@ def plot_equity_assignment_scores(
     y_label: str,
     annotation: str = "interaction",
     capability_categorizer=categorize_capability_from_score,
+    report_interaction_stats: bool = False,
     show: bool = True,
 ):
     print(f"\nGenerating unweighted equity analysis plot for {outcome_col}...")
@@ -1383,6 +1294,33 @@ def plot_equity_assignment_scores(
     math_df["capability_cat"] = math_df["captest_score"].apply(
         lambda x: capability_categorizer(x, "math")
     )
+
+    if report_interaction_stats:
+        print(f"\nInteraction tests ({y_label.lower()}, unweighted)...")
+        _run_binned_numeric_model(
+            python_df,
+            "university_cat",
+            "Python University rank",
+            outcome_col=outcome_col,
+        )
+        _run_binned_numeric_model(
+            python_df,
+            "capability_cat",
+            "Python Prior knowledge",
+            outcome_col=outcome_col,
+        )
+        _run_binned_numeric_model(
+            math_df,
+            "university_cat",
+            "Game Theory University rank",
+            outcome_col=outcome_col,
+        )
+        _run_binned_numeric_model(
+            math_df,
+            "capability_cat",
+            "Game Theory Prior knowledge",
+            outcome_col=outcome_col,
+        )
 
     dimensions = [
         {
@@ -1630,26 +1568,11 @@ def plot_equity_hw1(python_df, math_df, output_file, *, show: bool = True):
         output_file,
         outcome_col="hw1_score",
         y_label="Assignment score",
-        annotation="slope_delta",
-        capability_categorizer=categorize_capability_from_score_appendix_hw1,
+        annotation="interaction",
+        capability_categorizer=categorize_capability_from_score,
+        report_interaction_stats=True,
         show=show,
     )
-
-
-def _compute_behavior_supergroup(
-    series: pd.Series,
-    *,
-    proactive_critic_categories: set[str],
-    passive_categories: set[str],
-) -> pd.Series:
-    def _map(cat: object) -> str:
-        if cat in proactive_critic_categories:
-            return "proactive_critic"
-        if cat in passive_categories:
-            return "passive"
-        return "passive"
-
-    return series.map(_map)
 
 
 def _calculate_means_by_category_two_groups(
@@ -1799,7 +1722,7 @@ def _plot_behavior_vs_exp_lines_combined(
     *,
     df: pd.DataFrame,
     course_name: str,
-    proactive_critic_color: str,
+    proactive_critical_color: str,
     passive_color: str,
     output_path: Path,
     show: bool,
@@ -1823,10 +1746,10 @@ def _plot_behavior_vs_exp_lines_combined(
         ("capability_cat", ["Low", "Mid", "High"], "Prior knowledge"),
     ]
 
-    behavior_order = ["passive", "proactive_critic"]
+    behavior_order = ["passive", "proactive_critical"]
     behavior_labels = {
         "passive": "Limited\nengagement",
-        "proactive_critic": "Proactive\n& critic",
+        "proactive_critical": "Proactive\n& critical",
     }
     palette = {"Low": CONTROL_COLOR, "Mid": "#7F7F7F", "High": EXPERIMENT_COLOR}
     linestyles = {"Low": "-", "Mid": "--", "High": "-."}
@@ -1986,12 +1909,8 @@ def add_behavior_supergroup_python(python_df: pd.DataFrame) -> pd.DataFrame:
     )
     df_exp["a1_behavior_group"] = df_exp["username"].map(user_to_cat).fillna("no_chat")
 
-    proactive_critic_categories = {"try_then_ask", "ask_then_explain"}
-    passive_categories = {"mindless_copy", "no_chat"}
-    df_exp["behavior_supergroup"] = _compute_behavior_supergroup(
-        df_exp["a1_behavior_group"],
-        proactive_critic_categories=proactive_critic_categories,
-        passive_categories=passive_categories,
+    df_exp["behavior_supergroup"] = df_exp["a1_behavior_group"].map(
+        lambda category: behavior_supergroup(category, course_type="python")
     )
     df.loc[df_exp.index, "behavior_supergroup"] = df_exp["behavior_supergroup"]
     return df
@@ -2020,12 +1939,8 @@ def add_behavior_supergroup_math(math_df: pd.DataFrame) -> pd.DataFrame:
     )
     df_exp["a1_behavior_group"] = df_exp["username"].map(user_to_cat).fillna("no_chat")
 
-    proactive_critic_categories = {"try_then_ask", "ask_then_explain", "fix_after_wrong", "challenge_wrong"}
-    passive_categories = {"mindless_copy", "no_chat"}
-    df_exp["behavior_supergroup"] = _compute_behavior_supergroup(
-        df_exp["a1_behavior_group"],
-        proactive_critic_categories=proactive_critic_categories,
-        passive_categories=passive_categories,
+    df_exp["behavior_supergroup"] = df_exp["a1_behavior_group"].map(
+        lambda category: behavior_supergroup(category, course_type="math")
     )
     df.loc[df_exp.index, "behavior_supergroup"] = df_exp["behavior_supergroup"]
     return df
@@ -2069,8 +1984,14 @@ def _extract_term_stats(results: object, term_prefix: str) -> Dict[str, Tuple[fl
     return out
 
 
-def _run_binned_numeric_model(df: pd.DataFrame, cat_col: str, label: str) -> None:
-    sub = df[["hw2_score", "group", cat_col]].dropna().copy()
+def _run_binned_numeric_model(
+    df: pd.DataFrame,
+    cat_col: str,
+    label: str,
+    *,
+    outcome_col: str = "hw2_score",
+) -> None:
+    sub = df[[outcome_col, "group", cat_col]].dropna().copy()
     sub = sub[sub["group"].isin([0, 1])]
     if sub.empty or sub["group"].nunique() < 2:
         print(f"  {label}: insufficient data; skip.")
@@ -2082,7 +2003,7 @@ def _run_binned_numeric_model(df: pd.DataFrame, cat_col: str, label: str) -> Non
         print(f"  {label}: insufficient data; skip.")
         return
     sub["bin_num"] = sub[cat_col].cat.codes.astype(float) + 1.0
-    formula = "hw2_score ~ bin_num + group + bin_num:group"
+    formula = f"{outcome_col} ~ bin_num + group + bin_num:group"
     try:
         model = smf.ols(formula, data=sub).fit()
     except Exception as exc:
@@ -2142,6 +2063,11 @@ def report_explained_variance_behavior(
             base_coef, base_p = base_terms[term]
             full_coef, full_p = full_terms.get(term, (float("nan"), float("nan")))
             delta = full_coef - base_coef
+            accounted_fraction = (
+                (base_coef - full_coef) / base_coef
+                if not math.isclose(base_coef, 0.0, abs_tol=1e-12)
+                else float("nan")
+            )
             shrink = abs(full_coef) < abs(base_coef)
             sig_to_nonsig = (base_p < 0.05) and (full_p >= 0.05)
             nonsig_to_sig = (base_p >= 0.05) and (full_p < 0.05)
@@ -2157,10 +2083,15 @@ def report_explained_variance_behavior(
             if nonsig_to_sig:
                 flags.append("ns->sig")
             flag_str = f" [{', '.join(flags)}]" if flags else ""
+            accounted_str = (
+                f", accounted={(100.0 * accounted_fraction):.1f}%"
+                if np.isfinite(accounted_fraction)
+                else ", accounted=N/A"
+            )
             print(
                 f"  {label} {term}: base={base_coef:+.4f} (p={base_p:.3g}), "
                 f"full={full_coef:+.4f} (p={full_p:.3g}), "
-                f"Δ={delta:+.4f}{flag_str}"
+                f"Δ={delta:+.4f}{accounted_str}{flag_str}"
             )
         print(
             f"  {label} significance shifts: sig->ns={sig_to_nonsig_count}, ns->sig={nonsig_to_sig_count}"
@@ -2237,12 +2168,25 @@ def compute_explained_variance_behavior_metrics(
             return None, None, None
         return base_coef, full_coef, full_coef - base_coef
 
+    def _accounted_fraction(
+        base_coef: float | None, full_coef: float | None
+    ) -> float | None:
+        if (
+            base_coef is None
+            or full_coef is None
+            or math.isclose(base_coef, 0.0, abs_tol=1e-12)
+        ):
+            return None
+        return (base_coef - full_coef) / base_coef
+
     uni_base_coef, uni_full_coef, uni_delta_coef = _extract_delta(
         (uni_base_model, uni_full_model), "university_cat_num"
     )
     cap_base_coef, cap_full_coef, cap_delta_coef = _extract_delta(
         (cap_base_model, cap_full_model), "capability_cat_num"
     )
+    uni_accounted_fraction = _accounted_fraction(uni_base_coef, uni_full_coef)
+    cap_accounted_fraction = _accounted_fraction(cap_base_coef, cap_full_coef)
 
     def _r2_delta(base_model: object, full_model: object) -> tuple[float | None, float | None, float | None]:
         try:
@@ -2261,6 +2205,7 @@ def compute_explained_variance_behavior_metrics(
             "base_coef": uni_base_coef,
             "full_coef": uni_full_coef,
             "delta_coef": uni_delta_coef,
+            "accounted_fraction": uni_accounted_fraction,
             "base_r2": uni_base_r2,
             "full_r2": uni_full_r2,
             "delta_r2": uni_delta_r2,
@@ -2271,6 +2216,7 @@ def compute_explained_variance_behavior_metrics(
             "base_coef": cap_base_coef,
             "full_coef": cap_full_coef,
             "delta_coef": cap_delta_coef,
+            "accounted_fraction": cap_accounted_fraction,
             "base_r2": cap_base_r2,
             "full_r2": cap_full_r2,
             "delta_r2": cap_delta_r2,
@@ -2278,6 +2224,189 @@ def compute_explained_variance_behavior_metrics(
             "full_terms": full_cap,
         },
     }
+
+
+def compute_bootstrap_indirect_association_metrics(
+    df: pd.DataFrame,
+    course_name: str,
+    *,
+    n_boot: int = 5000,
+    seed: int = 42,
+    controls: Optional[List[str]] = None,
+) -> Optional[pd.DataFrame]:
+    """Estimate indirect associations (a*b) with percentile bootstrap CIs.
+
+    The analysis is restricted to experimental participants. Background strata
+    are encoded Low=1, Mid=2, High=3, and the binary mediator is one for the
+    proactive-and-critical supergroup.
+    """
+    if n_boot < 1:
+        raise ValueError("n_boot must be at least 1.")
+
+    controls = list(controls or [])
+    missing_controls = [col for col in controls if col not in df.columns]
+    if missing_controls:
+        raise KeyError(f"Missing mediation controls: {missing_controls}")
+
+    df_exp = df[df["group"] == 1].copy()
+    if df_exp.empty:
+        print(f"[Bootstrap mediation] No Experiment users for {course_name}; skip.")
+        return None
+
+    if "university_cat" not in df_exp.columns:
+        df_exp["university_cat"] = df_exp["university_ranking_num"].apply(
+            normalize_university_ranking_from_num
+        )
+    if "capability_cat" not in df_exp.columns:
+        df_exp["capability_cat"] = df_exp["captest_score"].apply(
+            lambda x: categorize_capability_from_score(x, course_name.lower())
+        )
+
+    required_cols = [
+        "hw2_score",
+        "university_cat",
+        "capability_cat",
+        "behavior_supergroup",
+        *controls,
+    ]
+    sub = df_exp[required_cols].dropna().copy()
+    if len(sub) < 5:
+        print(f"[Bootstrap mediation] Not enough data for {course_name}; skip.")
+        return None
+
+    ordinal_map = {"Low": 1.0, "Mid": 2.0, "High": 3.0}
+    sub["university_cat_num"] = sub["university_cat"].astype(str).map(ordinal_map)
+    sub["capability_cat_num"] = sub["capability_cat"].astype(str).map(ordinal_map)
+    sub["proactive_critical"] = (
+        sub["behavior_supergroup"].astype(str) == "proactive_critical"
+    ).astype(float)
+
+    rows: List[Dict[str, Any]] = []
+    rng = np.random.default_rng(seed)
+    specifications = [
+        ("University ranking", "university_cat_num"),
+        ("Prior knowledge", "capability_cat_num"),
+    ]
+
+    for profile_label, x_col in specifications:
+        model_cols = ["hw2_score", x_col, "proactive_critical", *controls]
+        model_data = sub[model_cols].dropna().astype(float)
+        n = len(model_data)
+        if (
+            n < 5
+            or model_data[x_col].nunique() < 2
+            or model_data["proactive_critical"].nunique() < 2
+        ):
+            print(
+                f"[Bootstrap mediation] {course_name} {profile_label}: "
+                "insufficient variation; skip."
+            )
+            continue
+
+        y = model_data["hw2_score"].to_numpy(dtype=float)
+        x = model_data[x_col].to_numpy(dtype=float)
+        mediator = model_data["proactive_critical"].to_numpy(dtype=float)
+        control_matrix = (
+            model_data[controls].to_numpy(dtype=float)
+            if controls
+            else np.empty((n, 0), dtype=float)
+        )
+
+        def _estimate(indices: np.ndarray) -> Optional[float]:
+            sample_x = x[indices]
+            sample_m = mediator[indices]
+            if np.unique(sample_x).size < 2 or np.unique(sample_m).size < 2:
+                return None
+            sample_y = y[indices]
+            sample_controls = control_matrix[indices]
+            mediator_design = np.column_stack(
+                [np.ones(len(indices)), sample_x, sample_controls]
+            )
+            adjusted_design = np.column_stack(
+                [np.ones(len(indices)), sample_x, sample_m, sample_controls]
+            )
+            try:
+                mediator_coef = np.linalg.lstsq(
+                    mediator_design, sample_m, rcond=None
+                )[0]
+                adjusted_coef = np.linalg.lstsq(
+                    adjusted_design, sample_y, rcond=None
+                )[0]
+            except np.linalg.LinAlgError:
+                return None
+
+            a = float(mediator_coef[1])
+            b = float(adjusted_coef[2])
+            return a * b
+
+        point = _estimate(np.arange(n))
+        if point is None:
+            print(
+                f"[Bootstrap mediation] {course_name} {profile_label}: "
+                "point estimate failed; skip."
+            )
+            continue
+
+        bootstrap_estimates: List[float] = []
+        attempts = 0
+        max_attempts = max(n_boot * 5, n_boot + 100)
+        while len(bootstrap_estimates) < n_boot and attempts < max_attempts:
+            attempts += 1
+            estimate = _estimate(rng.integers(0, n, size=n))
+            if estimate is None:
+                continue
+            bootstrap_estimates.append(estimate)
+
+        successful_boot = len(bootstrap_estimates)
+        if successful_boot < n_boot:
+            print(
+                f"[Bootstrap mediation] {course_name} {profile_label}: "
+                f"only {successful_boot}/{n_boot} valid resamples."
+            )
+
+        values = np.asarray(bootstrap_estimates, dtype=float)
+        ci_low, ci_high = (
+            np.percentile(values, [2.5, 97.5])
+            if len(values)
+            else (float("nan"), float("nan"))
+        )
+        rows.append(
+            {
+                "course": course_name,
+                "profile": profile_label,
+                "indirect_ab": point,
+                "boot_se": float(np.std(values, ddof=1))
+                if len(values) > 1
+                else float("nan"),
+                "ci_low": float(ci_low),
+                "ci_high": float(ci_high),
+                "n": n,
+                "n_boot": successful_boot,
+                "ci_excludes_zero": bool(ci_low > 0 or ci_high < 0),
+            }
+        )
+
+    return pd.DataFrame(rows) if rows else None
+
+
+def report_bootstrap_indirect_association(
+    metrics: Optional[pd.DataFrame],
+    course_name: str,
+) -> None:
+    """Print the bootstrap indirect association for each learner profile."""
+    if metrics is None or metrics.empty:
+        return
+
+    print(f"\n[Bootstrap indirect association] {course_name} (Experiment only)")
+    print("  X encoding: Low=1, Mid=2, High=3; M: proactive_critical=1, passive=0")
+    for _, row in metrics.iterrows():
+        marker = " *" if bool(row["ci_excludes_zero"]) else ""
+        print(
+            f"  {row['profile']} (n={int(row['n'])}, "
+            f"bootstrap={int(row['n_boot'])}): "
+            f"a*b={row['indirect_ab']:+.4f} "
+            f"[95% CI {row['ci_low']:+.4f}, {row['ci_high']:+.4f}]{marker}"
+        )
 
 
 def report_behavior_prediction_from_university_and_prior(df: pd.DataFrame, course_name: str) -> None:
@@ -2324,8 +2453,8 @@ def report_behavior_prediction_from_university_and_prior(df: pd.DataFrame, cours
     sub["university_cat_num"] = sub["university_cat"].map(uni_map).astype(float)
     sub["capability_cat_num"] = sub["capability_cat"].map(cap_map).astype(float)
 
-    # Binary behavior outcome: proactive_critic vs passive
-    sub["proactive_critic"] = (sub["behavior_supergroup"] == "proactive_critic").astype(float)
+    # Binary behavior outcome: proactive_critical vs passive
+    sub["proactive_critical"] = (sub["behavior_supergroup"] == "proactive_critical").astype(float)
 
     def _fit_and_report(formula: str, term: str, label: str) -> None:
         try:
@@ -2345,8 +2474,8 @@ def report_behavior_prediction_from_university_and_prior(df: pd.DataFrame, cours
 
     print(f"\n[Behavior prediction] {course_name} (Experiment only)")
     print(f"  Numeric encoding: university_cat={uni_map}, capability_cat={cap_map}")
-    _fit_and_report("proactive_critic ~ university_cat_num", "university_cat_num", "University -> Behavior")
-    _fit_and_report("proactive_critic ~ capability_cat_num", "capability_cat_num", "Prior -> Behavior")
+    _fit_and_report("proactive_critical ~ university_cat_num", "university_cat_num", "University -> Behavior")
+    _fit_and_report("proactive_critical ~ capability_cat_num", "capability_cat_num", "Prior -> Behavior")
 
     # Merge Mid/High vs Low for university
     # Direct proportion difference test: Mid/High vs Low
@@ -2356,8 +2485,8 @@ def report_behavior_prediction_from_university_and_prior(df: pd.DataFrame, cours
     if n_low == 0 or n_mh == 0:
         print("  University (Mid/High vs Low): N/A")
         return
-    succ_low = float(sub.loc[is_low, "proactive_critic"].sum())
-    succ_mh = float(sub.loc[~is_low, "proactive_critic"].sum())
+    succ_low = float(sub.loc[is_low, "proactive_critical"].sum())
+    succ_mh = float(sub.loc[~is_low, "proactive_critical"].sum())
     try:
         # One-sided test: Mid/High proportion > Low proportion
         stat, pval = proportions_ztest([succ_mh, succ_low], [n_mh, n_low], alternative="larger")
@@ -2373,7 +2502,7 @@ def report_behavior_prediction_from_university_and_prior(df: pd.DataFrame, cours
         f"(p={pval:.3g}){sig} [p_low={p_low:.3f}, p_mid_high={p_mh:.3f}]"
     )
 
-_INEQUALITY_RUN_SOURCE = '# Run Block 1\nprint("=" * 80)\nprint("Generating Unweighted Equity Analysis")\nprint("=" * 80)\n\nprint("\\nStep 1: Loading base data...")\npython_df, math_df = load_valid_users(VALIDUSER_FILE)\npresurvey = load_presurvey_data(PRESURVEY_FILE)\n\nprint("\\nStep 2: Merging presurvey data...")\npython_df = merge_presurvey_to_df(python_df, presurvey, "python")\nmath_df = merge_presurvey_to_df(math_df, presurvey, "math")\n\nprint("\\nStep 3: Loading capability scores...")\npy_captest, math_captest = load_capability_scores(REPO_ROOT / "data/annotation/captest_scores.json")\npython_df = python_df.merge(py_captest, on="username", how="left")\nmath_df = math_df.merge(math_captest, on="username", how="left")\n\nprint("\\nStep 4: Loading homework scores...")\npy_homework, math_homework = load_homework_scores(\n    py_scores_file=PYTHON_SCORE_FILE,\n    math_scores_file=MATH_SCORE_FILE,\n    math_hw1_problems=MATH_HW1_PROBLEMS,\n    math_hw2_problems=MATH_HW2_PROBLEMS,\n    math_score_map=MATH_SCORE_MAP,\n)\npython_df = python_df.merge(py_homework, on="username", how="left")\nmath_df = math_df.merge(math_homework, on="username", how="left")\n\nprint("\\nStep 5: Preparing covariates...")\npython_df = prepare_covariates(python_df, "python")\nmath_df = prepare_covariates(math_df, "math")\n\nprint("\\nStep 6: Adding capability categories...")\npython_df["captest_tertile"] = python_df["captest_score"].apply(\n    lambda x: categorize_capability_from_score(x, "python")\n)\nmath_df["captest_tertile"] = math_df["captest_score"].apply(\n    lambda x: categorize_capability_from_score(x, "math")\n)\n\nprint("\\nStep 6a: Interaction tests (unweighted)...")\npython_df["university_cat"] = python_df["university_ranking_num"].apply(\n    normalize_university_ranking_from_num\n)\npython_df["capability_cat"] = python_df["captest_score"].apply(\n    lambda x: categorize_capability_from_score(x, "python")\n)\nmath_df["university_cat"] = math_df["university_ranking_num"].apply(\n    normalize_university_ranking_from_num\n)\nmath_df["capability_cat"] = math_df["captest_score"].apply(\n    lambda x: categorize_capability_from_score(x, "math")\n)\n_run_binned_numeric_model(python_df, "university_cat", "Python University rank")\n_run_binned_numeric_model(python_df, "capability_cat", "Python Prior knowledge")\n_run_binned_numeric_model(math_df, "university_cat", "Math University rank")\n_run_binned_numeric_model(math_df, "capability_cat", "Math Prior knowledge")\n\nprint("\\nStep 7: Generating plots (unweighted, per-course)...")\noutput_file = FIGURES_DIR / "inequal_unweighted.pdf"\nplot_equity(python_df, math_df, output_file, show=SHOW_FIGURES)\n\nprint("\\nStep 7a: Adding behavior supergroups (Experiment only)...")\npython_df = add_behavior_supergroup_python(python_df)\nmath_df = add_behavior_supergroup_math(math_df)\n\nprint("\\nStep 7b: Explained variance + behavior vs Experiment equity plots...")\nprint("=" * 80)\nprint("Coefficient Shift Analysis (Behavior Contribution)")\nprint("=" * 80)\npython_ev_metrics = compute_explained_variance_behavior_metrics(python_df, "Python")\nmath_ev_metrics = compute_explained_variance_behavior_metrics(math_df, "Math")\nreport_explained_variance_behavior(python_df, "Python", metrics=python_ev_metrics)\nreport_explained_variance_behavior(math_df, "Math", metrics=math_ev_metrics)\n\nPROACTIVE_CRITIC_COLOR = "#31a354"\nPASSIVE_COLOR = "#7f7f7f"\n_plot_behavior_vs_exp_lines_combined(\n    df=python_df,\n    course_name="Python",\n    proactive_critic_color=PROACTIVE_CRITIC_COLOR,\n    passive_color=PASSIVE_COLOR,\n    output_path=FIGURES_DIR / "inequal_behavior_combined_python.pdf",\n    show=SHOW_FIGURES,\n    explained_metrics=python_ev_metrics,\n)\n_plot_behavior_vs_exp_lines_combined(\n    df=math_df,\n    course_name="Math",\n    proactive_critic_color=PROACTIVE_CRITIC_COLOR,\n    passive_color=PASSIVE_COLOR,\n    output_path=FIGURES_DIR / "inequal_behavior_combined_math.pdf",\n    show=SHOW_FIGURES,\n    explained_metrics=math_ev_metrics,\n)\n\nprint("\\nStep 8: Generating A1 behavior-group proportion plots (Python, Experiment)...")\nbehavior_out = FIGURES_DIR / "a1_behavior_group_proportions_python_exp.pdf"\nplot_python_a1_behavior_group_proportions(python_df, behavior_out, show=SHOW_FIGURES)\nprint("\\nStep 8a: Predicting A1 behavior from university/prior (Python, Experiment)...")\nreport_behavior_prediction_from_university_and_prior(python_df, "Python")\n\nprint("\\nStep 9: Generating A1 behavior-group proportion plots (Math, Experiment)...")\nmath_behavior_out = FIGURES_DIR / "a1_behavior_group_proportions_math_exp.pdf"\nplot_math_a1_behavior_group_proportions(math_df, math_behavior_out, show=SHOW_FIGURES)\nprint("\\nStep 9a: Predicting A1 behavior from university/prior (Math, Experiment)...")\nreport_behavior_prediction_from_university_and_prior(math_df, "Math")\n\nprint("\\n" + "=" * 80)\nprint("Unweighted Equity Analysis Complete")\nprint("=" * 80)\n'
+_INEQUALITY_RUN_SOURCE = '# Run Block 1\nprint("=" * 80)\nprint("Generating Unweighted Equity Analysis")\nprint("=" * 80)\n\nprint("\\nStep 1: Loading base data...")\npython_df, math_df = load_valid_users(VALIDUSER_FILE)\npresurvey = load_presurvey_data(PRESURVEY_FILE)\n\nprint("\\nStep 2: Merging presurvey data...")\npython_df = merge_presurvey_to_df(python_df, presurvey, "python")\nmath_df = merge_presurvey_to_df(math_df, presurvey, "math")\n\nprint("\\nStep 3: Loading capability scores...")\npy_captest, math_captest = load_capability_scores(REPO_ROOT / "data/annotation/captest_scores.json")\npython_df = python_df.merge(py_captest, on="username", how="left")\nmath_df = math_df.merge(math_captest, on="username", how="left")\n\nprint("\\nStep 4: Loading homework scores...")\npy_homework, math_homework = load_homework_scores(\n    py_scores_file=PYTHON_SCORE_FILE,\n    math_scores_file=MATH_SCORE_FILE,\n    math_hw1_problems=MATH_HW1_PROBLEMS,\n    math_hw2_problems=MATH_HW2_PROBLEMS,\n    math_score_map=MATH_SCORE_MAP,\n)\npython_df = python_df.merge(py_homework, on="username", how="left")\nmath_df = math_df.merge(math_homework, on="username", how="left")\n\nprint("\\nStep 5: Preparing covariates...")\npython_df = prepare_covariates(python_df, "python")\nmath_df = prepare_covariates(math_df, "math")\n\nprint("\\nStep 6: Adding capability categories...")\npython_df["captest_tertile"] = python_df["captest_score"].apply(\n    lambda x: categorize_capability_from_score(x, "python")\n)\nmath_df["captest_tertile"] = math_df["captest_score"].apply(\n    lambda x: categorize_capability_from_score(x, "math")\n)\n\nprint("\\nStep 6a: Interaction tests (unweighted)...")\npython_df["university_cat"] = python_df["university_ranking_num"].apply(\n    normalize_university_ranking_from_num\n)\npython_df["capability_cat"] = python_df["captest_score"].apply(\n    lambda x: categorize_capability_from_score(x, "python")\n)\nmath_df["university_cat"] = math_df["university_ranking_num"].apply(\n    normalize_university_ranking_from_num\n)\nmath_df["capability_cat"] = math_df["captest_score"].apply(\n    lambda x: categorize_capability_from_score(x, "math")\n)\n_run_binned_numeric_model(python_df, "university_cat", "Python University rank")\n_run_binned_numeric_model(python_df, "capability_cat", "Python Prior knowledge")\n_run_binned_numeric_model(math_df, "university_cat", "Math University rank")\n_run_binned_numeric_model(math_df, "capability_cat", "Math Prior knowledge")\n\nprint("\\nStep 7: Generating plots (unweighted, per-course)...")\noutput_file = FIGURES_DIR / "inequal_unweighted.pdf"\nplot_equity(python_df, math_df, output_file, show=SHOW_FIGURES)\n\nprint("\\nStep 7a: Adding behavior supergroups (Experiment only)...")\npython_df = add_behavior_supergroup_python(python_df)\nmath_df = add_behavior_supergroup_math(math_df)\n\nprint("\\nStep 7b: Explained variance + behavior vs Experiment equity plots...")\nprint("=" * 80)\nprint("Coefficient Shift Analysis (Behavior Contribution)")\nprint("=" * 80)\npython_ev_metrics = compute_explained_variance_behavior_metrics(python_df, "Python")\nmath_ev_metrics = compute_explained_variance_behavior_metrics(math_df, "Math")\nreport_explained_variance_behavior(python_df, "Python", metrics=python_ev_metrics)\nreport_explained_variance_behavior(math_df, "Math", metrics=math_ev_metrics)\n\nPROACTIVE_CRITICAL_COLOR = "#31a354"\nPASSIVE_COLOR = "#7f7f7f"\n_plot_behavior_vs_exp_lines_combined(\n    df=python_df,\n    course_name="Python",\n    proactive_critical_color=PROACTIVE_CRITICAL_COLOR,\n    passive_color=PASSIVE_COLOR,\n    output_path=FIGURES_DIR / "inequal_behavior_combined_python.pdf",\n    show=SHOW_FIGURES,\n    explained_metrics=python_ev_metrics,\n)\n_plot_behavior_vs_exp_lines_combined(\n    df=math_df,\n    course_name="Math",\n    proactive_critical_color=PROACTIVE_CRITICAL_COLOR,\n    passive_color=PASSIVE_COLOR,\n    output_path=FIGURES_DIR / "inequal_behavior_combined_math.pdf",\n    show=SHOW_FIGURES,\n    explained_metrics=math_ev_metrics,\n)\n\nprint("\\nStep 8: Generating A1 behavior-group proportion plots (Python, Experiment)...")\nbehavior_out = FIGURES_DIR / "a1_behavior_group_proportions_python_exp.pdf"\nplot_python_a1_behavior_group_proportions(python_df, behavior_out, show=SHOW_FIGURES)\nprint("\\nStep 8a: Predicting A1 behavior from university/prior (Python, Experiment)...")\nreport_behavior_prediction_from_university_and_prior(python_df, "Python")\n\nprint("\\nStep 9: Generating A1 behavior-group proportion plots (Math, Experiment)...")\nmath_behavior_out = FIGURES_DIR / "a1_behavior_group_proportions_math_exp.pdf"\nplot_math_a1_behavior_group_proportions(math_df, math_behavior_out, show=SHOW_FIGURES)\nprint("\\nStep 9a: Predicting A1 behavior from university/prior (Math, Experiment)...")\nreport_behavior_prediction_from_university_and_prior(math_df, "Math")\n\nprint("\\n" + "=" * 80)\nprint("Unweighted Equity Analysis Complete")\nprint("=" * 80)\n'
 
 def run_background_behavior_inequality_analysis(*, figures_dir: Optional[Path] = None, show_figures: bool = False) -> dict[str, Any]:
     """Generate the figures and statistics for AI-use variation by background."""

@@ -1071,7 +1071,7 @@ def _plot_behavior_heterogeneity_two_panel(
         handletextpad=0.5,
     )
     # Keep x-label close to panels (not too low), with reserved bottom area for legend.
-    fig.supxlabel("Share of A1 assignment problems by behavior category (%)", y=0.175, fontsize=14)
+    fig.supxlabel("Share of assignment problems by behavior category (%)", y=0.175, fontsize=14)
     fig.subplots_adjust(left=0.095, right=0.995, top=0.98, bottom=0.255, wspace=0.12)
     out_pdf.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_pdf, dpi=300, bbox_inches="tight")

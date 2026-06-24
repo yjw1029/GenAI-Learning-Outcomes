@@ -191,7 +191,7 @@ def build_feedback_mechanism_dataset() -> pd.DataFrame:
     df["behavior_supergroup"] = df["behavior_supergroup"].fillna("passive")
     df["feedback_group"] = np.where(df["group"] == 0, "control", df["behavior_supergroup"])
     df["observed_proactive"] = (
-        (df["group"] == 1) & (df["behavior_supergroup"] == "proactive_critic")
+        (df["group"] == 1) & (df["behavior_supergroup"] == "proactive_critical")
     ).astype(int)
     df["observed_passive"] = (
         (df["group"] == 1) & (df["behavior_supergroup"] == "passive")

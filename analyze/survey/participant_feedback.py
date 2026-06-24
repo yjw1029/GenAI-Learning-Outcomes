@@ -28,6 +28,7 @@ import analyze.behavior.a1 as behavior_a1
 from analyze.behavior.category_rules import (
     MATH_A1_PRECEDENCE,
     PYTHON_A1_PRECEDENCE,
+    behavior_supergroup,
     pick_math_a1_category,
     pick_python_a1_category,
 )
@@ -126,7 +127,7 @@ MATH_PRETRY_BLANK_PROP_THRESHOLD = 0.8
 MATH_PRECEDENCE = MATH_A1_PRECEDENCE
 MATH_VERBATIM_MODES = VERBATIM_MODES
 
-PROACTIVE_CRITIC_COLOR = "#31a354"
+PROACTIVE_CRITICAL_COLOR = "#31a354"
 PASSIVE_COLOR = "#7f7f7f"
 CONTROL_COLOR = "#c6dbef"
 EXP_COLOR = "#a1d99b"
@@ -1056,22 +1057,6 @@ def compute_math_a1_behavior_groups(
     return {uid: feat.category for uid, feat in feats_by_user.items()}
 
 
-def _compute_behavior_supergroup(
-    series: pd.Series,
-    *,
-    proactive_critic_categories: set[str],
-    passive_categories: set[str],
-) -> pd.Series:
-    def _map(cat: object) -> str:
-        if cat in proactive_critic_categories:
-            return "proactive_critic"
-        if cat in passive_categories:
-            return "passive"
-        return "passive"
-
-    return series.map(_map)
-
-
 def add_behavior_supergroup_python(python_df: pd.DataFrame) -> pd.DataFrame:
     labels_path = REPO_ROOT / "data/annotation/a1_chat_labels.json"
     python_details_path = REPO_ROOT / "data/annotation/python_details.json"
@@ -1095,12 +1080,8 @@ def add_behavior_supergroup_python(python_df: pd.DataFrame) -> pd.DataFrame:
     )
     df_exp["a1_behavior_group"] = df_exp["username"].map(user_to_cat).fillna("no_chat")
 
-    proactive_critic_categories = {"try_then_ask", "ask_then_explain"}
-    passive_categories = {"mindless_copy", "no_chat"}
-    df_exp["behavior_supergroup"] = _compute_behavior_supergroup(
-        df_exp["a1_behavior_group"],
-        proactive_critic_categories=proactive_critic_categories,
-        passive_categories=passive_categories,
+    df_exp["behavior_supergroup"] = df_exp["a1_behavior_group"].map(
+        lambda category: behavior_supergroup(category, course_type="python")
     )
     df.loc[df_exp.index, "behavior_supergroup"] = df_exp["behavior_supergroup"]
     return df
@@ -1129,12 +1110,8 @@ def add_behavior_supergroup_math(math_df: pd.DataFrame) -> pd.DataFrame:
     )
     df_exp["a1_behavior_group"] = df_exp["username"].map(user_to_cat).fillna("no_chat")
 
-    proactive_critic_categories = {"try_then_ask", "ask_then_explain", "fix_after_wrong", "challenge_wrong"}
-    passive_categories = {"mindless_copy", "no_chat"}
-    df_exp["behavior_supergroup"] = _compute_behavior_supergroup(
-        df_exp["a1_behavior_group"],
-        proactive_critic_categories=proactive_critic_categories,
-        passive_categories=passive_categories,
+    df_exp["behavior_supergroup"] = df_exp["a1_behavior_group"].map(
+        lambda category: behavior_supergroup(category, course_type="math")
     )
     df.loc[df_exp.index, "behavior_supergroup"] = df_exp["behavior_supergroup"]
     return df

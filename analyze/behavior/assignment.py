@@ -16,6 +16,12 @@ from analyze.background.inequality import (
     compute_math_a1_behavior_groups,
     compute_python_a1_behavior_groups,
 )
+from analyze.behavior.category_rules import (
+    MATH_A1_DISPLAY_NAMES,
+    MATH_A1_DISPLAY_ORDER,
+    PYTHON_A1_DISPLAY_NAMES,
+    PYTHON_A1_DISPLAY_ORDER,
+)
 from analyze.config import (
     MATH_HW1_PROBLEMS,
     MATH_HW2_PROBLEMS,
@@ -402,9 +408,12 @@ def _load_hw1_tables() -> tuple[pd.DataFrame, pd.DataFrame]:
     math_df = math_df.merge(math_homework, on="username", how="left")
     python_df = prepare_covariates(python_df, course_type="python")
     math_df = prepare_covariates(math_df, course_type="math")
+    # A score of zero is a valid assignment outcome, not missing data. Keep the
+    # same participant population used by the main behavior analysis and only
+    # remove rows whose HW1 score is genuinely unavailable.
     return (
-        python_df[python_df["hw1_score"] > 0].reset_index(drop=True),
-        math_df[math_df["hw1_score"] > 0].reset_index(drop=True),
+        python_df[python_df["hw1_score"].notna()].reset_index(drop=True),
+        math_df[math_df["hw1_score"].notna()].reset_index(drop=True),
     )
 
 
@@ -421,13 +430,8 @@ def build_python_hw1_behavior_score_groups(python_df: pd.DataFrame) -> tuple[lis
         nochat_tried_if_attempted=True,
     )
 
-    display_name = {
-        "no_chat": "Abstention",
-        "mindless_copy": "Rote-adoption",
-        "try_then_ask": "Active-trial",
-        "ask_then_explain": "Verification",
-    }
-    behavior_order = ["no_chat", "mindless_copy", "try_then_ask", "ask_then_explain"]
+    display_name = PYTHON_A1_DISPLAY_NAMES
+    behavior_order = PYTHON_A1_DISPLAY_ORDER
     exp_df = python_df[python_df["group"] == 1].copy()
     exp_df["a1_behavior_group"] = exp_df["username"].map(user_to_cat).fillna("no_chat")
     control_scores = python_df.loc[python_df["group"] == 0, "hw1_score"].dropna().astype(float).tolist()
@@ -454,22 +458,8 @@ def build_math_hw1_behavior_score_groups(math_df: pd.DataFrame) -> tuple[list[fl
         nochat_tried_if_attempted=True,
     )
 
-    display_name = {
-        "no_chat": "Abstention",
-        "mindless_copy": "Rote-adoption",
-        "fix_after_wrong": "Error-correction",
-        "try_then_ask": "Active-trial",
-        "challenge_wrong": "Verification",
-        "ask_then_explain": "Verification",
-    }
-    behavior_order = [
-        "no_chat",
-        "mindless_copy",
-        "try_then_ask",
-        "fix_after_wrong",
-        "challenge_wrong",
-        "ask_then_explain",
-    ]
+    display_name = MATH_A1_DISPLAY_NAMES
+    behavior_order = MATH_A1_DISPLAY_ORDER
     exp_df = math_df[math_df["group"] == 1].copy()
     exp_df["a1_behavior_group"] = exp_df["username"].map(user_to_cat).fillna("no_chat")
     control_scores = math_df.loc[math_df["group"] == 0, "hw1_score"].dropna().astype(float).tolist()

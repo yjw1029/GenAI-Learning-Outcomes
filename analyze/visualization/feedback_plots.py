@@ -23,22 +23,22 @@ from analyze.survey.participant_feedback import (
 BEHAVIOR_LABELS = {
     "control": "Control",
     "passive": "Limited engagement",
-    "proactive_critic": "Proactive and critic",
+    "proactive_critical": "Proactive and critical",
 }
 
 BEHAVIOR_FILL_COLORS = {
     "control": "#d9d9d9",
     "passive": "#c6dbef",
-    "proactive_critic": "#a1d99b",
+    "proactive_critical": "#a1d99b",
 }
 
 BEHAVIOR_LINE_COLORS = {
     "control": "#8c8c8c",
     "passive": "#6baed6",
-    "proactive_critic": "#31a354",
+    "proactive_critical": "#31a354",
 }
-ATTITUDE_GROUP_ORDER = ["control", "passive", "proactive_critic"]
-BEHAVIOR_GROUP_ORDER = ["passive", "proactive_critic"]
+ATTITUDE_GROUP_ORDER = ["control", "passive", "proactive_critical"]
+BEHAVIOR_GROUP_ORDER = ["passive", "proactive_critical"]
 
 
 def save_and_maybe_show(fig: plt.Figure, output_path: Path, *, show: bool = False) -> None:
@@ -242,7 +242,7 @@ def plot_risk_delta_by_behavior(
     metric_order = risk_df[["metric", "label"]].drop_duplicates().values.tolist()
     fig, axes = plt.subplots(2, 1, figsize=(7.0, 5.25), dpi=300, sharex=True)
     axes = np.asarray(axes)
-    offsets = {"control": -0.20, "passive": 0.0, "proactive_critic": 0.20}
+    offsets = {"control": -0.20, "passive": 0.0, "proactive_critical": 0.20}
     y = np.arange(len(metric_order))
     for ax_idx, (ax, course) in enumerate(zip(axes, COURSE_ORDER)):
         sub = risk_df[risk_df["course"] == course]
