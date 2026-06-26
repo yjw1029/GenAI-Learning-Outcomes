@@ -1728,6 +1728,7 @@ def _plot_behavior_vs_exp_lines_combined(
     show: bool,
     behavior_col: str = "behavior_supergroup",
     explained_metrics: Optional[Dict[str, Dict[str, float | Dict[str, int]]]] = None,
+    indirect_metrics: Optional[pd.DataFrame] = None,
 ) -> None:
     df_exp = df[df["group"] == 1].copy()
     if df_exp.empty:
@@ -1755,6 +1756,20 @@ def _plot_behavior_vs_exp_lines_combined(
     linestyles = {"Low": "-", "Mid": "--", "High": "-."}
     markers = {"Low": "o", "Mid": "s", "High": "^"}
     y_axis_top = 11.0 if course_name.lower() == "math" else None
+
+    def _indirect_beta(metric_key: str) -> float | None:
+        if indirect_metrics is None or indirect_metrics.empty:
+            return None
+        profile_label = (
+            "University ranking" if metric_key == "university" else "Prior knowledge"
+        )
+        rows = indirect_metrics.loc[indirect_metrics["profile"] == profile_label]
+        if rows.empty or "indirect_ab" not in rows.columns:
+            return None
+        value = rows.iloc[0]["indirect_ab"]
+        if pd.isna(value):
+            return None
+        return float(value)
 
     def _plot_df_for(profile_col: str, profile_order: list[str]) -> pd.DataFrame:
         plot_df = df_exp.loc[
@@ -1835,13 +1850,17 @@ def _plot_behavior_vs_exp_lines_combined(
             ax.set_ylim(0.0, y_axis_top)
         metric_key = "university" if _col == "university_cat" else "prior"
         metrics = (explained_metrics or {}).get(metric_key, {})
-        delta_coef = metrics.get("delta_coef")
-        delta_r2 = metrics.get("delta_r2")
-        if delta_coef is not None and delta_r2 is not None:
+        accounted_fraction = metrics.get("accounted_fraction")
+        indirect_beta = _indirect_beta(metric_key)
+        if indirect_beta is None:
+            delta_coef = metrics.get("delta_coef")
+            if delta_coef is not None:
+                indirect_beta = -1.0 * float(delta_coef)
+        if accounted_fraction is not None and indirect_beta is not None:
             ax.text(
                 0.5,
                 0.96,
-                rf"$\Delta \beta={delta_coef:+.2f}$  $\Delta R^2={delta_r2:+.3f}$",
+                rf"$A_{{\beta}}={100.0 * accounted_fraction:.1f}\%$  $I_{{\beta}}={indirect_beta:.2f}$",
                 transform=ax.transAxes,
                 ha="center",
                 va="top",
