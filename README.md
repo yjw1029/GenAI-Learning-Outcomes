@@ -12,7 +12,7 @@
 
 ## Overview
 
-This repository contains the experimental platform and analysis code for the paper *Heterogeneous Impact of AI Assistance on Learning Outcomes*. The study ran structured learning experiments in two course contexts, Python and Game Theory, comparing students with GPT-assisted access against a no-LLM control group.
+This repository contains the experimental platform and analysis code for the paper *Learning behavior accounts for background-related advantage in AI-assisted education*. The study ran structured learning experiments in two course contexts, Python and Game Theory, comparing students with GPT-assisted access against a no-LLM control group.
 
 The codebase includes the NiceGUI-based experiment platform, course materials and problem sets, participant survey and scoring utilities, and Jupyter notebooks used for the quantitative analyses and figures reported in the main paper and appendix.
 
