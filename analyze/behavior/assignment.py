@@ -158,7 +158,7 @@ def print_control_vs_exp_tests(
     for key, values in exp_hw_by_behavior.items():
         groups[key] = _clean(values)
 
-    print("\nControl vs Experiment (behavior groups) hypothesis tests (raw p-values):")
+    print("\nControl vs Experiment (AI use patterns) hypothesis tests (raw p-values):")
     for key, values in groups.items():
         label = key.replace("\n", " ")
         if values:

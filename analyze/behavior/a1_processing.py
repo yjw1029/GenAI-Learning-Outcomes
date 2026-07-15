@@ -1071,7 +1071,7 @@ def _plot_behavior_heterogeneity_two_panel(
         handletextpad=0.5,
     )
     # Keep x-label close to panels (not too low), with reserved bottom area for legend.
-    fig.supxlabel("Share of assignment problems by behavior category (%)", y=0.175, fontsize=14)
+    fig.supxlabel("Share of assignment problems by AI use pattern (%)", y=0.175, fontsize=14)
     fig.subplots_adjust(left=0.095, right=0.995, top=0.98, bottom=0.255, wspace=0.12)
     out_pdf.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_pdf, dpi=300, bbox_inches="tight")
@@ -1528,7 +1528,7 @@ def print_control_vs_exp_tests(
     for k, ys in exp_hw2_by_behavior.items():
         groups[k] = _clean(ys)
 
-    print("\nControl vs Experiment (behavior groups) hypothesis tests (raw p-values):")
+    print("\nControl vs Experiment (AI use patterns) hypothesis tests (raw p-values):")
     for k, ys in groups.items():
         k1 = k.replace("\n", " ")
         if ys:

@@ -792,7 +792,7 @@ def plot_python_a1_behavior_group_proportions(
 
     df_exp = python_df[python_df["group"] == 1].copy()
     if df_exp.empty:
-        print("[A1 behavior] No Python Experiment users found; skip behavior plots.")
+        print("[A1 AI use patterns] No Python Experiment users found; skip AI-use-pattern plots.")
         return
 
     if "university_cat" not in df_exp.columns:
@@ -880,7 +880,7 @@ def plot_python_a1_behavior_group_proportions(
     if show:
         plt.show()
     plt.close(fig)
-    print(f"[A1 behavior] Saved behavior-group proportions plot to: {relative_path(output_file)}")
+    print(f"[A1 AI use patterns] Saved AI-use-pattern proportions plot to: {relative_path(output_file)}")
 
 
 def plot_math_a1_behavior_group_proportions(
@@ -891,7 +891,7 @@ def plot_math_a1_behavior_group_proportions(
 
     df_exp = math_df[math_df["group"] == 1].copy()
     if df_exp.empty:
-        print("[A1 behavior] No Math Experiment users found; skip behavior plots.")
+        print("[A1 AI use patterns] No Math Experiment users found; skip AI-use-pattern plots.")
         return
 
     if "university_cat" not in df_exp.columns:
@@ -983,7 +983,7 @@ def plot_math_a1_behavior_group_proportions(
     if show:
         plt.show()
     plt.close(fig)
-    print(f"[A1 behavior] Saved behavior-group proportions plot to: {relative_path(output_file)}")
+    print(f"[A1 AI use patterns] Saved AI-use-pattern proportions plot to: {relative_path(output_file)}")
 
 
 def calculate_means_by_category(
@@ -1610,7 +1610,7 @@ def _plot_behavior_vs_exp_lines(
 ) -> None:
     df_exp = df[df["group"] == 1].copy()
     if df_exp.empty:
-        print(f"[Behavior equity] No Experiment users for {course_name}; skip {behavior_label}.")
+        print(f"[AI use pattern equity] No Experiment users for {course_name}; skip {behavior_label}.")
         return
 
     if "university_cat" not in df_exp.columns:
@@ -1712,7 +1712,7 @@ def _plot_behavior_vs_exp_lines(
     fig.tight_layout(rect=[0.04, 0, 1, 0.92])
     output_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(output_path, bbox_inches="tight", dpi=300)
-    print(f"[Behavior equity] Saved plot to: {relative_path(output_path)}")
+    print(f"[AI use pattern equity] Saved plot to: {relative_path(output_path)}")
     if show:
         plt.show()
     plt.close(fig)
@@ -1732,7 +1732,7 @@ def _plot_behavior_vs_exp_lines_combined(
 ) -> None:
     df_exp = df[df["group"] == 1].copy()
     if df_exp.empty:
-        print(f"[Behavior equity] No Experiment users for {course_name}; skip combined plot.")
+        print(f"[AI use pattern equity] No Experiment users for {course_name}; skip combined plot.")
         return
 
     if "university_cat" not in df_exp.columns:
@@ -1899,7 +1899,7 @@ def _plot_behavior_vs_exp_lines_combined(
     fig.tight_layout(rect=[0.04, 0, 1, 0.94])
     output_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(output_path, bbox_inches="tight", dpi=300)
-    print(f"[Behavior equity] Saved combined plot to: {relative_path(output_path)}")
+    print(f"[AI use pattern equity] Saved combined plot to: {relative_path(output_path)}")
     if show:
         plt.show()
     plt.close(fig)
@@ -2431,7 +2431,7 @@ def report_bootstrap_indirect_association(
 def report_behavior_prediction_from_university_and_prior(df: pd.DataFrame, course_name: str) -> None:
     df_exp = df[df["group"] == 1].copy()
     if df_exp.empty:
-        print(f"[Behavior prediction] No Experiment users for {course_name}; skip.")
+        print(f"[AI use pattern prediction] No Experiment users for {course_name}; skip.")
         return
 
     if "university_cat" not in df_exp.columns:
@@ -2444,7 +2444,7 @@ def report_behavior_prediction_from_university_and_prior(df: pd.DataFrame, cours
     required_cols = ["behavior_supergroup", "university_cat", "capability_cat"]
     sub = df_exp[required_cols].dropna().copy()
     if sub.empty or len(sub) < 5:
-        print(f"[Behavior prediction] Not enough data for {course_name}; skip.")
+        print(f"[AI use pattern prediction] Not enough data for {course_name}; skip.")
         return
 
     def _order_levels(values: pd.Series) -> List[str]:
@@ -2459,7 +2459,7 @@ def report_behavior_prediction_from_university_and_prior(df: pd.DataFrame, cours
     uni_levels = _order_levels(sub["university_cat"])
     cap_levels = _order_levels(sub["capability_cat"])
     if not uni_levels or not cap_levels:
-        print(f"[Behavior prediction] Missing categories for {course_name}; skip.")
+        print(f"[AI use pattern prediction] Missing categories for {course_name}; skip.")
         return
 
     sub["university_cat"] = pd.Categorical(sub["university_cat"].astype(str), categories=uni_levels, ordered=True)
@@ -2479,11 +2479,11 @@ def report_behavior_prediction_from_university_and_prior(df: pd.DataFrame, cours
         try:
             model = smf.ols(formula, data=sub).fit()
         except Exception as exc:
-            print(f"[Behavior prediction] {course_name} {label} model failed: {exc}")
+            print(f"[AI use pattern prediction] {course_name} {label} model failed: {exc}")
             return
         terms = _extract_term_stats(model, term)
         if not terms:
-            print(f"[Behavior prediction] {course_name} {label}: N/A")
+            print(f"[AI use pattern prediction] {course_name} {label}: N/A")
             return
         coef, pval = list(terms.values())[0]
         sig = " *" if pval < 0.05 else ""
@@ -2491,10 +2491,10 @@ def report_behavior_prediction_from_university_and_prior(df: pd.DataFrame, cours
             f"  {label}: coef={coef:+.4f} (p={pval:.3g}){sig}"
         )
 
-    print(f"\n[Behavior prediction] {course_name} (Experiment only)")
+    print(f"\n[AI use pattern prediction] {course_name} (Experiment only)")
     print(f"  Numeric encoding: university_cat={uni_map}, capability_cat={cap_map}")
-    _fit_and_report("proactive_critical ~ university_cat_num", "university_cat_num", "University -> Behavior")
-    _fit_and_report("proactive_critical ~ capability_cat_num", "capability_cat_num", "Prior -> Behavior")
+    _fit_and_report("proactive_critical ~ university_cat_num", "university_cat_num", "University -> AI use pattern")
+    _fit_and_report("proactive_critical ~ capability_cat_num", "capability_cat_num", "Prior -> AI use pattern")
 
     # Merge Mid/High vs Low for university
     # Direct proportion difference test: Mid/High vs Low
@@ -2510,7 +2510,7 @@ def report_behavior_prediction_from_university_and_prior(df: pd.DataFrame, cours
         # One-sided test: Mid/High proportion > Low proportion
         stat, pval = proportions_ztest([succ_mh, succ_low], [n_mh, n_low], alternative="larger")
     except Exception as exc:
-        print(f"[Behavior prediction] {course_name} University (Mid/High vs Low) test failed: {exc}")
+        print(f"[AI use pattern prediction] {course_name} University (Mid/High vs Low) test failed: {exc}")
         return
     p_low = succ_low / n_low if n_low else float("nan")
     p_mh = succ_mh / n_mh if n_mh else float("nan")
