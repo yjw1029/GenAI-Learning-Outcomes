@@ -12,7 +12,7 @@
 
 ## Overview
 
-This repository contains the experimental platform and analysis code for the paper *Learning behavior accounts for background-related advantage in AI-assisted education*. The study ran structured learning experiments in two course contexts, Python and Game Theory, comparing students with GPT-assisted access against a no-LLM control group.
+This repository contains the experimental platform and analysis code for the paper *How students engage with AI predicts learning outcomes in AI-assisted education*. The study ran structured learning experiments in two course contexts, Python and Game Theory, comparing students with GPT-assisted access against a no-LLM control group.
 
 The codebase includes the NiceGUI-based experiment platform, course materials and problem sets, participant survey and scoring utilities, and Jupyter notebooks used for the quantitative analyses and figures reported in the main paper and appendix.
 
@@ -22,7 +22,7 @@ The codebase includes the NiceGUI-based experiment platform, course materials an
 * `platform_en/`: English-language version of the experiment platform with the same core structure.
 * `platform/presets/` and `platform_en/presets/`: example platform configuration files and authentication rosters.
 * `analyze/`: analysis notebooks and reusable analysis modules.
-* `analyze/*.ipynb`: notebooks that reproduce the main-paper and appendix analyses for *Heterogeneous Impact of AI Assistance on Learning Outcomes*.
+* `analyze/*.ipynb`: notebooks that reproduce the main-paper and appendix analyses for *How students engage with AI predicts learning outcomes in AI-assisted education*.
 
 ## System Requirements
 
@@ -105,7 +105,7 @@ Then open the notebooks under `analyze/` and run them in that environment. The n
 
 ## Results
 
-The analysis notebooks correspond to the manuscript sections in *Heterogeneous Impact of AI Assistance on Learning Outcomes* as follows:
+The analysis notebooks correspond to the manuscript sections in *How students engage with AI predicts learning outcomes in AI-assisted education* as follows:
 
 * `analyze/experimental_design_stats.ipynb`: participant statistics and baseline prior-knowledge balance checks for the Experimental Design section.
 * `analyze/analysis_behavior_heterogeneity.ipynb`: AI-use learning behavior profiles and their association with exam scores.
