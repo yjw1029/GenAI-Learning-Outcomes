@@ -1831,6 +1831,7 @@ def _plot_behavior_vs_exp_lines_combined(
         ax.set_xticklabels([behavior_labels[b] for b in behavior_order], rotation=0, ha="center", fontsize=14)
         ax.set_xlabel(xlabel, fontsize=15)
         ax.set_ylabel("Exam score", fontsize=15)
+        ax.yaxis.label.set_visible(True)
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
         ax.tick_params(

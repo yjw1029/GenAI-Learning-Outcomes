@@ -844,13 +844,13 @@ def _plot_behavior_heterogeneity_heatmap(
         print("\nHeterogeneity heatmap skipped (missing dependency: numpy). Install with: `uv add numpy`")
         return
 
-    behaviors = ["Abstention", "Rote", "Trial", "Verify", "Correct"]
+    behaviors = ["Abstention", "Rote-adoption", "Active-trial", "Error-correction", "Verification"]
     behavior_colors = {
-        "Abstention": "#bdbdbd",
-        "Rote": "#9ecae1",
-        "Trial": "#a1d99b",
-        "Verify": "#31a354",
-        "Correct": "#74c476",
+        "Abstention": BEHAVIOR_FIGURE_COLORS["Abstention"],
+        "Rote-adoption": "#9ecae1",
+        "Active-trial": "#a1d99b",
+        "Error-correction": "#74c476",
+        "Verification": "#238b45",
     }
     mat, users_sorted = _build_behavior_mix_matrix(
         user_problem_chats=user_problem_chats,
@@ -915,9 +915,9 @@ def _build_behavior_mix_matrix(
             if is_abstention:
                 counts[0] += 1
             elif is_correction:
-                counts[4] += 1
-            elif is_verification:
                 counts[3] += 1
+            elif is_verification:
+                counts[4] += 1
             elif is_trial:
                 counts[2] += 1
             elif is_rote:
@@ -927,6 +927,143 @@ def _build_behavior_mix_matrix(
     dom_val = np.max(mat, axis=1)
     order = np.lexsort((-dom_val, dominant))
     return mat[order, :], [users[idx] for idx in order.tolist()]
+
+
+def _sort_behavior_mix_by_participant_pattern(
+    mat,
+    users: List[str],
+    participant_patterns: Dict[str, str],
+    behaviors: List[str],
+):
+    """Order rows by participant pattern, then by the matching question-level share."""
+    import numpy as np  # type: ignore
+
+    behavior_index = {behavior: idx for idx, behavior in enumerate(behaviors)}
+    missing = [uid for uid in users if uid not in participant_patterns]
+    if missing:
+        raise ValueError(
+            "Missing participant-level AI use patterns for "
+            f"{len(missing)} participant(s): {missing[:3]}"
+        )
+    unknown = sorted({participant_patterns[uid] for uid in users} - set(behaviors))
+    if unknown:
+        raise ValueError(f"Unknown participant-level AI use pattern(s): {unknown}")
+
+    order = sorted(
+        range(len(users)),
+        key=lambda idx: (
+            behavior_index[participant_patterns[users[idx]]],
+            -float(mat[idx, behavior_index[participant_patterns[users[idx]]]]),
+            users[idx],
+        ),
+    )
+    sorted_mat = mat[np.asarray(order, dtype=int), :]
+    sorted_users = [users[idx] for idx in order]
+    sorted_patterns = [participant_patterns[uid] for uid in sorted_users]
+    return sorted_mat, sorted_users, sorted_patterns
+
+
+def _participant_pattern_groups(patterns: List[str], behaviors: List[str]):
+    """Return non-empty participant-pattern blocks as (label, start, end)."""
+    groups = []
+    for behavior in behaviors:
+        indices = [idx for idx, pattern in enumerate(patterns) if pattern == behavior]
+        if indices:
+            groups.append((behavior, indices[0], indices[-1] + 1))
+    return groups
+
+
+def _derive_participant_patterns_for_mix(
+    *,
+    course: str,
+    user_problem_chats: Dict[str, Dict[str, List[Any]]],
+    user_problem_attempted_without_chat: Dict[str, Dict[str, bool]],
+) -> Dict[str, str]:
+    """Rebuild canonical participant patterns for compatibility plotting entrypoints."""
+    if course == "python":
+        features = compute_all_user_features(
+            user_problem_chats,
+            user_problem_attempted_without_chat,
+            scores={},
+            tried_threshold=0.5,
+            copy_first_threshold=0.5,
+            precedence=PYTHON_A1_PRECEDENCE,
+            nochat_tried_if_attempted=True,
+        )
+    elif course == "math":
+        features = compute_all_user_features_math(
+            user_problem_chats,
+            user_problem_attempted_without_chat,
+            scores={},
+            tried_threshold=0.5,
+            copy_first_threshold=0.5,
+            precedence=MATH_A1_PRECEDENCE,
+            nochat_tried_if_attempted=True,
+        )
+    else:
+        raise ValueError(f"Unsupported course for participant classification: {course}")
+    canonical = use_canonical_behavior_labels(list(features.values()), course=course)
+    return {feature.user_id: feature.category for feature in canonical}
+
+
+def _draw_participant_classification_strip(
+    *,
+    ax,
+    patterns: List[str],
+    behaviors: List[str],
+    behavior_colors: Dict[str, str],
+) -> None:
+    """Draw a one-cell-wide strip aligned with participant rows."""
+    import numpy as np  # type: ignore
+    from matplotlib.colors import ListedColormap  # type: ignore
+
+    behavior_index = {behavior: idx for idx, behavior in enumerate(behaviors)}
+    values = np.asarray([[behavior_index[pattern]] for pattern in patterns], dtype=float)
+    cmap = ListedColormap([behavior_colors[behavior] for behavior in behaviors])
+    ax.imshow(
+        values,
+        aspect="auto",
+        interpolation="nearest",
+        cmap=cmap,
+        vmin=-0.5,
+        vmax=len(behaviors) - 0.5,
+        origin="upper",
+    )
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.set_ylim(len(patterns) - 0.5, -0.5)
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+
+
+def _annotate_participant_pattern_groups(
+    *,
+    label_ax,
+    strip_ax,
+    mix_ax,
+    patterns: List[str],
+    behaviors: List[str],
+    show_labels: bool,
+) -> None:
+    """Separate participant groups and optionally label their classification."""
+    groups = _participant_pattern_groups(patterns, behaviors)
+    for behavior, start, end in groups:
+        if start > 0:
+            boundary = start - 0.5
+            strip_ax.axhline(boundary, color="white", linewidth=1.2, clip_on=False)
+        if show_labels:
+            center = (start + end - 1) / 2.0
+            label_ax.text(
+                0.98,
+                center,
+                f"{behavior}\n($n={end - start}$)",
+                transform=label_ax.get_yaxis_transform(),
+                ha="right",
+                va="center",
+                fontsize=13.5,
+                linespacing=1.0,
+                clip_on=False,
+            )
 
 
 def _draw_behavior_mix_panel(
@@ -961,7 +1098,7 @@ def _draw_behavior_mix_panel(
     ax.set_xlim(0.0, 1.0)
     ax.set_xlabel("", fontsize=13)
     if course_label:
-        ax.set_title(course_label, fontsize=13, pad=7)
+        ax.set_title(course_label, fontsize=16, pad=8)
     if show_y_axis and len(users_sorted) <= 25:
         ax.set_yticks(y)
         ax.set_yticklabels(users_sorted, fontsize=10)
@@ -1009,6 +1146,8 @@ def _plot_behavior_heterogeneity_two_panel(
     math_problem_features_fn: Any,
     out_pdf: Path,
     show: bool,
+    py_participant_patterns: Optional[Dict[str, str]] = None,
+    math_participant_patterns: Optional[Dict[str, str]] = None,
 ) -> None:
     pltx = _maybe_import_matplotlib()
     if pltx is None:
@@ -1029,40 +1168,154 @@ def _plot_behavior_heterogeneity_two_panel(
     if py_mat is None or math_mat is None:
         print("\nTwo-panel heterogeneity plot skipped (missing data).")
         return
-    behaviors = ["Abstention", "Rote-adoption", "Active-trial", "Error-correction", "Verification"]
-    colors = {behavior: BEHAVIOR_FIGURE_COLORS[behavior] for behavior in behaviors}
+    participant_behaviors = [
+        "Abstention",
+        "Rote-adoption",
+        "Active-trial",
+        "Error-correction",
+        "Verification",
+    ]
+    question_behaviors = [
+        "Abstention",
+        "Rote-adoption",
+        "Active-trial",
+        "Error-correction",
+        "Verification",
+    ]
+    participant_colors = {
+        behavior: BEHAVIOR_FIGURE_COLORS[behavior] for behavior in participant_behaviors
+    }
+    question_colors = {
+        "Abstention": BEHAVIOR_FIGURE_COLORS["Abstention"],
+        **{
+            behavior: BEHAVIOR_FIGURE_COLORS[behavior]
+            for behavior in question_behaviors
+            if behavior != "Abstention"
+        },
+    }
+    if py_participant_patterns is None:
+        py_participant_patterns = _derive_participant_patterns_for_mix(
+            course="python",
+            user_problem_chats=py_user_problem_chats,
+            user_problem_attempted_without_chat=py_user_problem_attempted_without_chat,
+        )
+    if math_participant_patterns is None:
+        math_participant_patterns = _derive_participant_patterns_for_mix(
+            course="math",
+            user_problem_chats=math_user_problem_chats,
+            user_problem_attempted_without_chat=math_user_problem_attempted_without_chat,
+        )
+    has_participant_patterns = (
+        py_participant_patterns is not None and math_participant_patterns is not None
+    )
+    if has_participant_patterns:
+        py_mat, py_users, py_patterns = _sort_behavior_mix_by_participant_pattern(
+            py_mat, py_users, py_participant_patterns, participant_behaviors
+        )
+        math_mat, math_users, math_patterns = _sort_behavior_mix_by_participant_pattern(
+            math_mat, math_users, math_participant_patterns, participant_behaviors
+        )
+    else:
+        py_patterns = []
+        math_patterns = []
     # Make each panel slender (narrow + taller) for paper layout readability.
     fig_h = max(4.6, min(7.2, 0.08 * max(len(py_users), len(math_users)) + 3.0))
-    fig, axes = pltx.subplots(1, 2, figsize=(8.2, fig_h), dpi=300, constrained_layout=False)
+    fig = pltx.figure(figsize=(9.0, fig_h), dpi=300, constrained_layout=False)
+    outer_grid = fig.add_gridspec(1, 2, wspace=0.30)
+    math_grid = outer_grid[0, 0].subgridspec(
+        1,
+        2,
+        width_ratios=[1.0, 0.055 if has_participant_patterns else 0.001],
+        wspace=0.025,
+    )
+    py_grid = outer_grid[0, 1].subgridspec(
+        1,
+        2,
+        width_ratios=[1.0, 0.055 if has_participant_patterns else 0.001],
+        wspace=0.025,
+    )
+    math_ax = fig.add_subplot(math_grid[0, 0])
+    math_strip_ax = fig.add_subplot(math_grid[0, 1], sharey=math_ax)
+    py_ax = fig.add_subplot(py_grid[0, 0])
+    py_strip_ax = fig.add_subplot(py_grid[0, 1], sharey=py_ax)
     _draw_behavior_mix_panel(
-        ax=axes[0],
+        ax=math_ax,
         mat=math_mat,
         users_sorted=math_users,
-        behaviors=behaviors,
-        behavior_colors=colors,
+        behaviors=question_behaviors,
+        behavior_colors=question_colors,
         course_label="",
         show_legend=False,
         show_y_axis=True,
         show_percent_tick_labels=False,
-        y_axis_label="Individual participants (one participant per row)",
+        y_axis_label="Individual participants (one per row)",
     )
+    if has_participant_patterns:
+        _draw_participant_classification_strip(
+            ax=math_strip_ax,
+            patterns=math_patterns,
+            behaviors=participant_behaviors,
+            behavior_colors=participant_colors,
+        )
+        _annotate_participant_pattern_groups(
+            label_ax=math_ax,
+            strip_ax=math_strip_ax,
+            mix_ax=math_ax,
+            patterns=math_patterns,
+            behaviors=participant_behaviors,
+            show_labels=False,
+        )
+        math_strip_ax.set_ylabel(
+            "Participant-level AI use pattern",
+            fontsize=14,
+            rotation=270,
+            labelpad=16,
+        )
+        math_strip_ax.yaxis.set_label_position("right")
+    else:
+        math_strip_ax.set_axis_off()
     _draw_behavior_mix_panel(
-        ax=axes[1],
+        ax=py_ax,
         mat=py_mat,
         users_sorted=py_users,
-        behaviors=behaviors,
-        behavior_colors=colors,
+        behaviors=question_behaviors,
+        behavior_colors=question_colors,
         course_label="",
         show_legend=False,
-        show_y_axis=False,
+        show_y_axis=True,
         show_percent_tick_labels=False,
+        y_axis_label="Individual participants (one per row)",
     )
-    handles, labels = axes[0].get_legend_handles_labels()
+    if has_participant_patterns:
+        _draw_participant_classification_strip(
+            ax=py_strip_ax,
+            patterns=py_patterns,
+            behaviors=participant_behaviors,
+            behavior_colors=participant_colors,
+        )
+        _annotate_participant_pattern_groups(
+            label_ax=py_ax,
+            strip_ax=py_strip_ax,
+            mix_ax=py_ax,
+            patterns=py_patterns,
+            behaviors=participant_behaviors,
+            show_labels=False,
+        )
+        py_strip_ax.set_ylabel(
+            "Participant-level AI use pattern",
+            fontsize=14,
+            rotation=270,
+            labelpad=16,
+        )
+        py_strip_ax.yaxis.set_label_position("right")
+    else:
+        py_strip_ax.set_axis_off()
+    handles, labels = math_ax.get_legend_handles_labels()
     fig.legend(
         handles,
         labels,
         loc="lower center",
-        bbox_to_anchor=(0.54, 0.095),
+        bbox_to_anchor=(0.55, 0.070),
         ncol=5,
         frameon=False,
         fontsize=15,
@@ -1070,9 +1323,12 @@ def _plot_behavior_heterogeneity_two_panel(
         columnspacing=0.9,
         handletextpad=0.5,
     )
-    # Keep x-label close to panels (not too low), with reserved bottom area for legend.
-    fig.supxlabel("Share of assignment problems by AI use pattern (%)", y=0.175, fontsize=14)
-    fig.subplots_adjust(left=0.095, right=0.995, top=0.98, bottom=0.255, wspace=0.12)
+    fig.supxlabel(
+        "Share of assignment questions by question-level AI use pattern (%)",
+        y=0.155,
+        fontsize=14,
+    )
+    fig.subplots_adjust(left=0.105, right=0.99, top=0.95, bottom=0.245)
     out_pdf.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_pdf, dpi=300, bbox_inches="tight")
     print(f"[Heterogeneity] Saved twin-panel: {relative_path(out_pdf)}")
